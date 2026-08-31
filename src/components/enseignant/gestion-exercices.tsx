@@ -19,6 +19,12 @@ import {
   Save,
   X,
   GripVertical,
+  Clapperboard,
+  PuzzleIcon,
+  Clock,
+  ExternalLink,
+  Info,
+  Check,
 } from "lucide-react";
 import {
   DESCRIPTIONS_TYPES,
@@ -28,15 +34,25 @@ import {
   composerTexteATrous,
   fabriquerPresentation,
   validerPayload,
+  type ArretVideo,
   type AssociationPayload,
+  type H5pPayload,
   type OrdrePayload,
   type OuvertePayload,
   type PayloadExercice,
   type QcmPayload,
   type TrousPayload,
   type TypeExercice,
+  type VideoInteractivePayload,
   type VraiFauxPayload,
 } from "@/lib/exercices";
+import {
+  ETIQUETTES_FOURNISSEUR,
+  normaliserUrlH5p,
+  normaliserVideo,
+  secondesEnTemps,
+  tempsEnSecondes,
+} from "@/lib/medias";
 import { JoueurExercice } from "@/components/exercice/joueur-exercice";
 
 export interface ExerciceEditable {
@@ -61,6 +77,8 @@ const ICONES_TYPES: Record<TypeExercice, typeof ListChecks> = {
   ordre: ArrowUpDown,
   association: Link2,
   question_ouverte: PenLine,
+  video_interactive: Clapperboard,
+  h5p: PuzzleIcon,
 };
 
 function resumeCourt(exo: ExerciceEditable): string {
@@ -77,6 +95,10 @@ function resumeCourt(exo: ExerciceEditable): string {
       return `${((p.elements as string[]) ?? []).length} éléments à classer`;
     case "association":
       return `${((p.paires as unknown[]) ?? []).length} paires à relier`;
+    case "video_interactive":
+      return `Vidéo · ${((p.arrets as unknown[]) ?? []).length} question(s) intégrée(s)`;
+    case "h5p":
+      return String(p.titre || p.embedUrl || "Activité H5P");
     default:
       return "";
   }
@@ -156,6 +178,43 @@ function FormulaireExercice({
       : ""
   );
 
+  // --- Vidéo interactive ---------------------------------------------------
+  const [videoUrl, setVideoUrl] = useState(() =>
+    initial && type === "video_interactive"
+      ? (initial.payload as VideoInteractivePayload).videoUrl
+      : ""
+  );
+  const [arrets, setArrets] = useState<ArretVideo[]>(() =>
+    initial && type === "video_interactive"
+      ? (initial.payload as VideoInteractivePayload).arrets
+      : [{ temps: 30, question: "", options: ["", ""], correct: 0, explication: "" }]
+  );
+  // Saisie du temps sous forme « 1:35 » (converti en secondes à la volée)
+  const [tempsSaisis, setTempsSaisis] = useState<string[]>(() =>
+    initial && type === "video_interactive"
+      ? (initial.payload as VideoInteractivePayload).arrets.map((a) =>
+          secondesEnTemps(a.temps)
+        )
+      : ["0:30"]
+  );
+
+  // --- H5P -----------------------------------------------------------------
+  const [h5p, setH5p] = useState<H5pPayload>(() =>
+    initial && type === "h5p"
+      ? (initial.payload as H5pPayload)
+      : {
+          embedUrl: "",
+          titre: "",
+          hauteur: 500,
+          validationAutomatique: false,
+          demanderScore: true,
+        }
+  );
+
+  function majArret(index: number, patch: Partial<ArretVideo>) {
+    setArrets((liste) => liste.map((a, i) => (i === index ? { ...a, ...patch } : a)));
+  }
+
   const [erreur, setErreur] = useState<string | null>(null);
   const [chargement, setChargement] = useState(false);
   const [montreApercu, setMontreApercu] = useState(false);
@@ -200,6 +259,22 @@ function FormulaireExercice({
                 .filter(Boolean)
             : [],
         } satisfies OuvertePayload;
+      case "video_interactive":
+        return {
+          videoUrl: videoUrl.trim(),
+          arrets: arrets.map((a) => ({
+            ...a,
+            question: a.question.trim(),
+            options: a.options.map((o) => o.trim()),
+            explication: a.explication.trim(),
+          })),
+        } satisfies VideoInteractivePayload;
+      case "h5p":
+        return {
+          ...h5p,
+          embedUrl: normaliserUrlH5p(h5p.embedUrl),
+          titre: h5p.titre.trim(),
+        } satisfies H5pPayload;
     }
   }
 
@@ -612,6 +687,301 @@ function FormulaireExercice({
                 </p>
               </div>
             )}
+          </>
+        )}
+
+        {type === "video_interactive" && (
+          <>
+            <div>
+              <label className="etiquette mb-1.5 block">
+                Adresse de la vidéo (YouTube, Vimeo, Google Drive ou fichier .mp4)
+              </label>
+              <input
+                value={videoUrl}
+                onChange={(e) => setVideoUrl(e.target.value)}
+                placeholder="https://www.youtube.com/watch?v=…"
+                className="champ"
+              />
+              {videoUrl.trim() !== "" &&
+                (() => {
+                  const v = normaliserVideo(videoUrl);
+                  if (v.fournisseur === "inconnu")
+                    return (
+                      <p className="mt-2 text-sm font-bold text-corail">
+                        Lien non reconnu. Utilisez YouTube, Vimeo, Google Drive ou une
+                        adresse se terminant par .mp4
+                      </p>
+                    );
+                  return (
+                    <p className="mt-2 flex flex-wrap items-center gap-2 text-sm font-bold text-menthe-fonce">
+                      <Check className="size-4" strokeWidth={3} />
+                      {ETIQUETTES_FOURNISSEUR[v.fournisseur]} détecté ·{" "}
+                      {v.interactif ? (
+                        "pause automatique disponible"
+                      ) : (
+                        <span className="text-ambre-fonce">
+                          pause automatique impossible : les questions seront posées après
+                          la vidéo
+                        </span>
+                      )}
+                    </p>
+                  );
+                })()}
+            </div>
+
+            <div>
+              <label className="etiquette mb-2 block">
+                Questions posées pendant la vidéo
+              </label>
+              <div className="space-y-4">
+                {arrets.map((arret, index) => (
+                  <div key={index} className="rounded-2xl bg-papier px-4 py-4">
+                    <div className="mb-3 flex flex-wrap items-center gap-2.5">
+                      <span className="font-titre grid size-8 place-items-center rounded-xl bg-encre text-sm font-bold text-papier">
+                        {index + 1}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <Clock className="size-4 text-azur" />
+                        <input
+                          value={tempsSaisis[index] ?? ""}
+                          onChange={(e) => {
+                            const valeur = e.target.value;
+                            setTempsSaisis((t) =>
+                              t.map((x, i) => (i === index ? valeur : x))
+                            );
+                            majArret(index, { temps: tempsEnSecondes(valeur) });
+                          }}
+                          placeholder="1:35"
+                          className="champ w-24 text-center"
+                          aria-label="Moment de la pause"
+                        />
+                        <span className="text-xs font-bold text-encre/45">
+                          = {secondesEnTemps(arret.temps)}
+                        </span>
+                      </span>
+                      {arrets.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setArrets((l) => l.filter((_, i) => i !== index));
+                            setTempsSaisis((t) => t.filter((_, i) => i !== index));
+                          }}
+                          className="btn-fantome ml-auto px-2 py-1.5"
+                          aria-label="Supprimer cet arrêt"
+                        >
+                          <X className="size-4" />
+                        </button>
+                      )}
+                    </div>
+
+                    <input
+                      value={arret.question}
+                      onChange={(e) => majArret(index, { question: e.target.value })}
+                      placeholder="Question posée à ce moment de la vidéo"
+                      className="champ mb-2.5"
+                    />
+
+                    <div className="space-y-2">
+                      {arret.options.map((option, io) => (
+                        <div key={io} className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            title="Bonne réponse"
+                            onClick={() => majArret(index, { correct: io })}
+                            className={`grid size-8 shrink-0 place-items-center rounded-xl border-2 font-titre text-xs font-bold transition-colors ${
+                              arret.correct === io
+                                ? "border-menthe bg-menthe text-white"
+                                : "border-encre/20 bg-white text-encre/40 hover:border-menthe"
+                            }`}
+                          >
+                            {String.fromCharCode(65 + io)}
+                          </button>
+                          <input
+                            value={option}
+                            onChange={(e) =>
+                              majArret(index, {
+                                options: arret.options.map((o, j) =>
+                                  j === io ? e.target.value : o
+                                ),
+                              })
+                            }
+                            placeholder={`Proposition ${io + 1}`}
+                            className="champ"
+                          />
+                          {arret.options.length > 2 && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                majArret(index, {
+                                  options: arret.options.filter((_, j) => j !== io),
+                                  correct:
+                                    arret.correct >= io && arret.correct > 0
+                                      ? arret.correct - 1
+                                      : arret.correct,
+                                })
+                              }
+                              className="btn-fantome px-2 py-1.5"
+                              aria-label="Supprimer la proposition"
+                            >
+                              <X className="size-4" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                      {arret.options.length < 4 && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            majArret(index, { options: [...arret.options, ""] })
+                          }
+                          className="btn-ligne px-3 py-1.5 text-xs"
+                        >
+                          <Plus className="size-3.5" /> Proposition
+                        </button>
+                      )}
+                      <input
+                        value={arret.explication}
+                        onChange={(e) => majArret(index, { explication: e.target.value })}
+                        placeholder="Explication affichée après (facultatif)"
+                        className="champ flex-1"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {arrets.length < 10 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const dernier = arrets[arrets.length - 1]?.temps ?? 0;
+                    setArrets([
+                      ...arrets,
+                      {
+                        temps: dernier + 30,
+                        question: "",
+                        options: ["", ""],
+                        correct: 0,
+                        explication: "",
+                      },
+                    ]);
+                    setTempsSaisis([...tempsSaisis, secondesEnTemps(dernier + 30)]);
+                  }}
+                  className="btn-ligne mt-3 px-3.5 py-1.5 text-xs"
+                >
+                  <Plus className="size-3.5" /> Ajouter un arrêt
+                </button>
+              )}
+            </div>
+          </>
+        )}
+
+        {type === "h5p" && (
+          <>
+            <div className="flex items-start gap-3 rounded-2xl bg-azur/8 px-4 py-3.5 text-sm font-semibold text-encre-doux">
+              <Info className="mt-0.5 size-5 shrink-0 text-azur" />
+              <span>
+                Créez votre activité sur{" "}
+                <a
+                  href="https://h5p.org/content-types-and-applications"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-bold text-azur underline underline-offset-2"
+                >
+                  h5p.org <ExternalLink className="inline size-3" />
+                </a>{" "}
+                (gratuit), <strong>Lumi</strong> (logiciel libre) ou votre Moodle, puis
+                cliquez sur <strong>« Embed »</strong> et collez ici le code obtenu.
+                Fablio en extrait automatiquement l&apos;adresse d&apos;intégration.
+              </span>
+            </div>
+
+            <div>
+              <label className="etiquette mb-1.5 block">
+                Code d&apos;intégration ou adresse de l&apos;activité H5P
+              </label>
+              <textarea
+                rows={3}
+                value={h5p.embedUrl}
+                onChange={(e) => setH5p({ ...h5p, embedUrl: e.target.value })}
+                placeholder='<iframe src="https://h5p.org/h5p/embed/123456" …></iframe>  ou  https://votre-site.h5p.com/content/123/embed'
+                className="champ rounded-2xl font-mono text-xs"
+              />
+              {h5p.embedUrl.trim() !== "" &&
+                (normaliserUrlH5p(h5p.embedUrl) ? (
+                  <p className="mt-2 flex items-start gap-1.5 text-sm font-bold break-all text-menthe-fonce">
+                    <Check className="mt-0.5 size-4 shrink-0" strokeWidth={3} />
+                    Adresse détectée : {normaliserUrlH5p(h5p.embedUrl)}
+                  </p>
+                ) : (
+                  <p className="mt-2 text-sm font-bold text-corail">
+                    Impossible de trouver une adresse https:// dans ce texte.
+                  </p>
+                ))}
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="etiquette mb-1.5 block">Titre affiché à l&apos;élève</label>
+                <input
+                  value={h5p.titre}
+                  onChange={(e) => setH5p({ ...h5p, titre: e.target.value })}
+                  placeholder="Retrouve les personnages de la fable"
+                  className="champ"
+                />
+              </div>
+              <div>
+                <label className="etiquette mb-1.5 block">Hauteur d&apos;affichage (px)</label>
+                <input
+                  type="number"
+                  min={200}
+                  max={1400}
+                  step={20}
+                  value={h5p.hauteur}
+                  onChange={(e) =>
+                    setH5p({ ...h5p, hauteur: Number(e.target.value) || 500 })
+                  }
+                  className="champ"
+                />
+                <p className="mt-1.5 text-xs font-semibold text-encre/45">
+                  Ajustée automatiquement ensuite par l&apos;activité.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2.5 border-t-2 border-dashed border-encre/10 pt-4">
+              <label className="flex cursor-pointer items-start gap-2.5 text-sm font-bold text-encre-doux">
+                <input
+                  type="checkbox"
+                  checked={h5p.validationAutomatique}
+                  onChange={(e) =>
+                    setH5p({ ...h5p, validationAutomatique: e.target.checked })
+                  }
+                  className="mt-0.5 size-4.5 accent-corail"
+                />
+                <span>
+                  Valider automatiquement l&apos;exercice quand l&apos;élève déclare avoir
+                  terminé
+                  <span className="block text-xs font-semibold text-encre/45">
+                    Décoché : la réponse vous est envoyée pour une correction manuelle
+                    (recommandé — le score H5P ne peut pas être récupéré depuis un site
+                    externe).
+                  </span>
+                </span>
+              </label>
+              <label className="flex cursor-pointer items-center gap-2.5 text-sm font-bold text-encre-doux">
+                <input
+                  type="checkbox"
+                  checked={h5p.demanderScore}
+                  onChange={(e) => setH5p({ ...h5p, demanderScore: e.target.checked })}
+                  className="size-4.5 accent-corail"
+                />
+                Demander à l&apos;élève le score obtenu dans l&apos;activité
+              </label>
+            </div>
           </>
         )}
       </div>

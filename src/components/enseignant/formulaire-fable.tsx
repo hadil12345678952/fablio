@@ -15,8 +15,14 @@ import {
   Turtle,
   Bird,
   Users,
+  Link as LinkIcon,
+  TriangleAlert,
+  Clapperboard,
+  Sparkles,
 } from "lucide-react";
 import { TexteRiche } from "@/components/texte-riche";
+import { LecteurVocal } from "@/components/lecteur-vocal";
+import { ETIQUETTES_FOURNISSEUR, normaliserUrlImage, normaliserVideo } from "@/lib/medias";
 
 export interface FableEditable {
   id: string;
@@ -25,6 +31,7 @@ export interface FableEditable {
   morale: string;
   imageUrl: string;
   audioUrl: string;
+  videoUrl: string;
   difficulte: string;
   publie: boolean;
   cibleCodeIds: string[];
@@ -55,7 +62,9 @@ export function FormulaireFable({
   const [texte, setTexte] = useState(fable?.texte ?? "");
   const [morale, setMorale] = useState(fable?.morale ?? "");
   const [imageUrl, setImageUrl] = useState(fable?.imageUrl ?? "");
+  const [imageCassee, setImageCassee] = useState(false);
   const [audioUrl, setAudioUrl] = useState(fable?.audioUrl ?? "");
+  const [videoUrl, setVideoUrl] = useState(fable?.videoUrl ?? "");
   const [difficulte, setDifficulte] = useState(fable?.difficulte ?? "facile");
   const [publie, setPublie] = useState(fable?.publie ?? false);
   const [cibles, setCibles] = useState<string[]>(fable?.cibleCodeIds ?? []);
@@ -64,6 +73,10 @@ export function FormulaireFable({
   const [chargement, setChargement] = useState(false);
   const zoneTexte = useRef<HTMLTextAreaElement>(null);
   const router = useRouter();
+
+  // Lien de partage (Drive, Dropbox…) → adresse d'image réellement affichable
+  const apercuImage = normaliserUrlImage(imageUrl);
+  const infoVideo = normaliserVideo(videoUrl);
 
   function insererMarqueur(avant: string, apres: string) {
     const zone = zoneTexte.current;
@@ -88,7 +101,17 @@ export function FormulaireFable({
     e.preventDefault();
     setErreur(null);
     setChargement(true);
-    const donnees = { titre, texte, morale, imageUrl, audioUrl, difficulte, publie, cibleCodeIds: cibles };
+    const donnees = {
+      titre,
+      texte,
+      morale,
+      imageUrl,
+      audioUrl,
+      videoUrl,
+      difficulte,
+      publie,
+      cibleCodeIds: cibles,
+    };
     try {
       const res = await fetch(
         edition ? `/api/enseignant/fables/${fable.id}` : "/api/enseignant/fables",
@@ -205,42 +228,112 @@ export function FormulaireFable({
             className="champ rounded-2xl"
           />
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label htmlFor="imageUrl" className="etiquette mb-1.5 flex items-center gap-1.5">
-              <ImageIcon className="size-3.5" /> Image d&apos;illustration (URL)
-            </label>
-            <input
-              id="imageUrl"
-              value={imageUrl}
-              onChange={(e) => setImageUrl(e.target.value)}
-              placeholder="/images/fables/cigale-fourmi.jpg"
-              className="champ"
-            />
-            {imageUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={imageUrl}
-                alt="Aperçu de l'illustration"
-                className="mt-3 aspect-[5/3] w-56 rounded-2xl border-2 border-encre/10 object-cover"
-                onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
-              />
-            )}
-          </div>
-          <div>
-            <label htmlFor="audioUrl" className="etiquette mb-1.5 flex items-center gap-1.5">
-              <Volume2 className="size-3.5" /> Lecture audio (URL, optionnel)
-            </label>
-            <input
-              id="audioUrl"
-              value={audioUrl}
-              onChange={(e) => setAudioUrl(e.target.value)}
-              placeholder="https://…/lecture.mp3"
-              className="champ"
-            />
-            <p className="mt-2 text-xs font-semibold text-encre/45">
-              Si fournie, un lecteur audio s&apos;affichera sur la page de lecture de l&apos;élève.
+        {/* --- Illustration ------------------------------------------------ */}
+        <div className="border-t-2 border-dashed border-encre/10 pt-5">
+          <label htmlFor="imageUrl" className="etiquette mb-1.5 flex items-center gap-1.5">
+            <ImageIcon className="size-3.5" /> Image d&apos;illustration
+          </label>
+          <input
+            id="imageUrl"
+            value={imageUrl}
+            onChange={(e) => {
+              setImageUrl(e.target.value);
+              setImageCassee(false);
+            }}
+            placeholder="https://drive.google.com/file/d/…/view  ou  /images/fables/cigale-fourmi.jpg"
+            className="champ"
+          />
+          <p className="mt-2 flex items-start gap-1.5 text-xs font-semibold text-encre/50">
+            <LinkIcon className="mt-0.5 size-3.5 shrink-0" />
+            Collez un lien direct <strong>ou un lien de partage Google Drive / Dropbox</strong> :
+            Fablio le convertit automatiquement en image affichable. Sur Drive, pensez à régler
+            le partage sur « Tous les utilisateurs disposant du lien ».
+          </p>
+
+          {imageUrl.trim() !== "" && (
+            <div className="mt-3 flex flex-wrap items-start gap-4">
+              <div className="relative aspect-[5/3] w-56 overflow-hidden rounded-2xl border-2 border-encre/10 bg-papier">
+                {!imageCassee ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={apercuImage}
+                    alt="Aperçu de l'illustration"
+                    className="size-full object-cover"
+                    onError={() => setImageCassee(true)}
+                    onLoad={() => setImageCassee(false)}
+                  />
+                ) : (
+                  <span className="grid size-full place-items-center px-3 text-center text-xs font-bold text-corail">
+                    <TriangleAlert className="mx-auto mb-1 size-5" />
+                    Image inaccessible : vérifiez le partage du fichier.
+                  </span>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="etiquette mb-1">Adresse utilisée par la plateforme</p>
+                <p className="rounded-xl bg-papier px-3 py-2 text-xs font-semibold break-all text-encre/60">
+                  {apercuImage}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* --- Vidéo -------------------------------------------------------- */}
+        <div className="border-t-2 border-dashed border-encre/10 pt-5">
+          <label htmlFor="videoUrl" className="etiquette mb-1.5 flex items-center gap-1.5">
+            <Clapperboard className="size-3.5" /> Vidéo de la fable (facultatif)
+          </label>
+          <input
+            id="videoUrl"
+            value={videoUrl}
+            onChange={(e) => setVideoUrl(e.target.value)}
+            placeholder="https://www.youtube.com/watch?v=…"
+            className="champ"
+          />
+          <p className="mt-2 text-xs font-semibold text-encre/50">
+            YouTube, Vimeo, Google Drive ou fichier .mp4. Pour une vidéo{" "}
+            <strong>interactive</strong> (pause + question), créez un exercice de type
+            « Vidéo interactive » plus bas.
+          </p>
+          {videoUrl.trim() !== "" &&
+            (infoVideo.fournisseur === "inconnu" ? (
+              <p className="mt-2 text-sm font-bold text-corail">
+                Lien vidéo non reconnu.
+              </p>
+            ) : (
+              <p className="mt-2 text-sm font-bold text-menthe-fonce">
+                ✓ {ETIQUETTES_FOURNISSEUR[infoVideo.fournisseur]} détecté
+              </p>
+            ))}
+        </div>
+
+        {/* --- Audio / synthèse vocale -------------------------------------- */}
+        <div className="border-t-2 border-dashed border-encre/10 pt-5">
+          <label htmlFor="audioUrl" className="etiquette mb-1.5 flex items-center gap-1.5">
+            <Volume2 className="size-3.5" /> Piste audio enregistrée (facultatif)
+          </label>
+          <input
+            id="audioUrl"
+            value={audioUrl}
+            onChange={(e) => setAudioUrl(e.target.value)}
+            placeholder="https://…/lecture.mp3"
+            className="champ"
+          />
+          <div className="mt-3 rounded-2xl bg-azur/8 px-4 py-3.5">
+            <p className="font-titre flex items-center gap-2 text-sm font-bold">
+              <Sparkles className="size-4 text-azur" />
+              Lecture automatique à voix haute
             </p>
+            <p className="mt-1 mb-2.5 text-xs font-semibold text-encre/55">
+              Même sans piste audio, l&apos;élève dispose d&apos;un bouton « Écouter la fable »
+              qui utilise la synthèse vocale. Testez le rendu ici :
+            </p>
+            <LecteurVocal
+              texte={texte.slice(0, 600) || "Écrivez d'abord le texte de la fable."}
+              compact
+              etiquette="Tester la voix"
+            />
           </div>
         </div>
       </div>

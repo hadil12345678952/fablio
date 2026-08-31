@@ -1,10 +1,19 @@
 # Fablio — Les fables prennent vie en classe
 
 Plateforme web éducative (français) pour l'apprentissage des fables à l'école
-primaire : l'enseignant crée fables et exercices (6 types), les élèves rejoignent
-la classe avec un **code de parrainage** (sans email), et l'enseignant suit les
-performances grâce à des **statistiques détaillées** (graphiques, erreurs
-fréquentes, export CSV/PDF).
+primaire : l'enseignant crée fables et exercices (**8 types**), les élèves
+rejoignent la classe avec un **code de parrainage** (sans email), et l'enseignant
+suit les performances grâce à des **statistiques détaillées** (graphiques,
+erreurs fréquentes, export CSV/PDF).
+
+### Fonctionnalités multimédia
+
+| Fonction | Détail |
+|---|---|
+| 🔊 **Lecture à voix haute** | Bouton « Écouter la fable » : API serveur `/api/tts` (OpenAI si `OPENAI_API_KEY`, sinon service gratuit sans clé, repli sur la voix du navigateur) |
+| 🎬 **Vidéo interactive** | YouTube / Vimeo / Drive / MP4 ; l'enseignant place des questions à des instants précis, la vidéo se met en pause |
+| 🧩 **Activités H5P** | Intégration par code `<iframe>` ou URL (h5p.org, h5p.com, Lumi, Moodle), redimensionnement automatique, entrée dans le suivi |
+| 🖼️ **Images par lien** | Liens directs ou de partage **Google Drive / Dropbox**, convertis automatiquement en URL affichable |
 
 - **Stack** : Next.js 16 (App Router) · React 19 · PostgreSQL + Drizzle ORM ·
   Tailwind CSS v4 · Recharts · bcrypt · sessions par cookie httpOnly.

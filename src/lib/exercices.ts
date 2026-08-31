@@ -9,6 +9,8 @@ export const TYPES_EXERCICES = [
   "ordre",
   "association",
   "question_ouverte",
+  "video_interactive",
+  "h5p",
 ] as const;
 
 export type TypeExercice = (typeof TYPES_EXERCICES)[number];
@@ -20,6 +22,8 @@ export const ETIQUETTES_TYPES: Record<TypeExercice, string> = {
   ordre: "Remise en ordre",
   association: "Association",
   question_ouverte: "Question ouverte",
+  video_interactive: "Vidéo interactive",
+  h5p: "Activité H5P",
 };
 
 export const DESCRIPTIONS_TYPES: Record<TypeExercice, string> = {
@@ -29,6 +33,9 @@ export const DESCRIPTIONS_TYPES: Record<TypeExercice, string> = {
   ordre: "L'élève replace des phrases ou événements dans le bon ordre.",
   association: "L'élève relie des éléments de deux colonnes (mot ↔ définition…).",
   question_ouverte: "Réponse libre courte, corrigée automatiquement ou par l'enseignant.",
+  video_interactive:
+    "Une vidéo qui s'arrête aux moments choisis pour poser une question à l'élève.",
+  h5p: "Une activité H5P externe (h5p.org, Lumi, Moodle…) intégrée à la fable.",
 };
 
 // ----- Payloads par type ---------------------------------------------------
@@ -65,13 +72,40 @@ export interface OuvertePayload {
   reponsesAcceptees: string[]; // si non vide → correction automatique
 }
 
+/** Un arrêt de la vidéo : à `temps` secondes, on pose une question. */
+export interface ArretVideo {
+  temps: number; // en secondes
+  question: string;
+  options: string[];
+  correct: number; // index de la bonne réponse
+  explication: string;
+}
+export interface VideoInteractivePayload {
+  videoUrl: string;
+  arrets: ArretVideo[];
+}
+
+export interface H5pPayload {
+  /** URL d'intégration (iframe) de l'activité H5P. */
+  embedUrl: string;
+  titre: string;
+  /** Hauteur initiale de l'iframe en pixels (ajustée ensuite automatiquement). */
+  hauteur: number;
+  /** true : terminer l'activité vaut tous les points ; false : l'enseignant corrige. */
+  validationAutomatique: boolean;
+  /** Demander à l'élève son score H5P (auto-évaluation transmise à l'enseignant). */
+  demanderScore: boolean;
+}
+
 export type PayloadExercice =
   | QcmPayload
   | VraiFauxPayload
   | TrousPayload
   | OrdrePayload
   | AssociationPayload
-  | OuvertePayload;
+  | OuvertePayload
+  | VideoInteractivePayload
+  | H5pPayload;
 
 export type ReponseEleve =
   | number[]
@@ -295,6 +329,30 @@ export function noterExercice(
       // Pas de réponses acceptées ⇒ correction manuelle par l'enseignant
       return { score: null, maxScore: points, estCorrect: null };
     }
+    case "video_interactive": {
+      const p = payload as VideoInteractivePayload;
+      const rep = Array.isArray(reponse) ? (reponse as (number | null)[]) : [];
+      const bons = p.arrets.reduce(
+        (acc, arret, i) => acc + (rep[i] === arret.correct ? 1 : 0),
+        0
+      );
+      const total = Math.max(1, p.arrets.length);
+      return {
+        score: arrondiQuart((points * bons) / total),
+        maxScore: points,
+        estCorrect: bons === p.arrets.length && p.arrets.length > 0,
+      };
+    }
+    case "h5p": {
+      const p = payload as H5pPayload;
+      // L'activité H5P est hébergée sur un site externe : elle ne peut pas
+      // transmettre son score de façon fiable (iframe d'un autre domaine).
+      // Deux stratégies, choisies par l'enseignant :
+      if (p.validationAutomatique) {
+        return { score: points, maxScore: points, estCorrect: true };
+      }
+      return { score: null, maxScore: points, estCorrect: null };
+    }
   }
 }
 
@@ -328,6 +386,16 @@ export function corrigeExercice(
       const p = payload as OuvertePayload;
       return p.corrigeType ? [`Corrigé type : ${p.corrigeType}`] : [];
     }
+    case "video_interactive": {
+      const p = payload as VideoInteractivePayload;
+      return p.arrets.map((a, i) => {
+        const bonne = a.options[a.correct] ?? "?";
+        const suffixe = a.explication ? ` — ${a.explication}` : "";
+        return `Question ${i + 1} : « ${bonne} »${suffixe}`;
+      });
+    }
+    case "h5p":
+      return [];
   }
 }
 
@@ -402,6 +470,41 @@ export function validerPayload(
     case "question_ouverte": {
       const p = payload as OuvertePayload;
       if (vide(p.question)) return "La question est obligatoire.";
+      return null;
+    }
+    case "video_interactive": {
+      const p = payload as VideoInteractivePayload;
+      if (vide(p.videoUrl)) return "L'adresse de la vidéo est obligatoire.";
+      if (!Array.isArray(p.arrets) || p.arrets.length < 1)
+        return "Ajoutez au moins une question à un moment de la vidéo.";
+      if (p.arrets.length > 10) return "10 arrêts maximum par vidéo.";
+      for (let i = 0; i < p.arrets.length; i++) {
+        const a = p.arrets[i];
+        if (!Number.isFinite(a.temps) || a.temps < 0)
+          return `Arrêt n°${i + 1} : le moment de pause est invalide.`;
+        if (vide(a.question))
+          return `Arrêt n°${i + 1} : la question est obligatoire.`;
+        if (!Array.isArray(a.options) || a.options.length < 2)
+          return `Arrêt n°${i + 1} : il faut au moins 2 propositions.`;
+        if (a.options.some((o) => vide(o)))
+          return `Arrêt n°${i + 1} : toutes les propositions doivent être remplies.`;
+        if (
+          typeof a.correct !== "number" ||
+          a.correct < 0 ||
+          a.correct >= a.options.length
+        )
+          return `Arrêt n°${i + 1} : indiquez la bonne réponse.`;
+      }
+      return null;
+    }
+    case "h5p": {
+      const p = payload as H5pPayload;
+      if (vide(p.embedUrl))
+        return "Collez l'adresse d'intégration (ou le code <iframe>) de l'activité H5P.";
+      if (!/^https:\/\//i.test(p.embedUrl))
+        return "L'adresse H5P doit commencer par https:// (intégration sécurisée).";
+      if (!Number.isFinite(p.hauteur) || p.hauteur < 200 || p.hauteur > 1400)
+        return "La hauteur doit être comprise entre 200 et 1400 pixels.";
       return null;
     }
   }

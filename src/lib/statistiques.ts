@@ -416,6 +416,10 @@ function resumeExercice(exo: ExerciceRow): string {
       return `${((p.paires as unknown[]) ?? []).length} paires à relier`;
     case "question_ouverte":
       return String(p.question ?? "");
+    case "video_interactive":
+      return `Vidéo interactive · ${((p.arrets as unknown[]) ?? []).length} question(s) pendant la lecture`;
+    case "h5p":
+      return String(p.titre || "Activité H5P externe");
   }
 }
 
@@ -505,15 +509,27 @@ export async function statsFable(
       });
     }
 
-    // Réponses ouvertes en attente de correction
+    // Réponses en attente de correction manuelle (questions ouvertes et H5P)
     let enAttente: ReponseEnAttente[] | null = null;
-    if (type === "question_ouverte") {
+    if (type === "question_ouverte" || type === "h5p") {
       const attente = de.filter((t) => t.estCorrect === null);
       enAttente = attente.map((t) => ({
         tentativeId: t.id,
         pseudo: eleveParId.get(t.eleveId)?.pseudo ?? "Élève",
         reponse: String(t.reponse ?? ""),
         dateEtiquette: etiquetteDateHeure(t.creeLe),
+      }));
+    }
+
+    // Vidéo interactive : réussite question par question
+    if (type === "video_interactive") {
+      const p = exo.payload as { arrets: { question: string; correct: number }[] };
+      distribution = p.arrets.map((arret, i) => ({
+        etiquette: `Q${i + 1} · ${arret.question.slice(0, 42)}`,
+        nombre: de.filter(
+          (t) => Array.isArray(t.reponse) && (t.reponse as number[])[i] === arret.correct
+        ).length,
+        correct: true,
       }));
     }
 

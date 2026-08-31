@@ -23,6 +23,7 @@ import {
   corrigeExercice,
   noterExercice,
   type AssociationPayload,
+  type H5pPayload,
   type OrdrePayload,
   type OuvertePayload,
   type PayloadExercice,
@@ -31,9 +32,12 @@ import {
   type ReponseEleve,
   type TrousPayload,
   type TypeExercice,
+  type VideoInteractivePayload,
   type VraiFauxPayload,
 } from "@/lib/exercices";
 import { formatScore } from "@/lib/format";
+import { VideoInteractive } from "@/components/exercice/video-interactive";
+import { ActiviteH5p } from "@/components/exercice/activite-h5p";
 
 // ---------------------------------------------------------------------------
 // Types publics
@@ -387,6 +391,86 @@ function ZoneOuverte({ payload, verrouille, onChangement }: PropsZone & {
   );
 }
 
+function ZoneVideo({
+  payload,
+  verrouille,
+  onChangement,
+}: PropsZone & { payload: VideoInteractivePayload }) {
+  return (
+    <VideoInteractive
+      videoUrl={payload.videoUrl}
+      arrets={payload.arrets}
+      verrouille={verrouille}
+      onReponses={(reponses, complet) => onChangement(reponses, complet)}
+    />
+  );
+}
+
+function ZoneH5p({
+  payload,
+  verrouille,
+  onChangement,
+}: PropsZone & { payload: H5pPayload }) {
+  const [termine, setTermine] = useState(false);
+  const [scoreDeclare, setScoreDeclare] = useState("");
+
+  function declarer(valeur: boolean, score = scoreDeclare) {
+    setTermine(valeur);
+    if (!valeur) {
+      onChangement("", false);
+      return;
+    }
+    const detail =
+      payload.demanderScore && score.trim() !== ""
+        ? `Activité H5P terminée — score annoncé par l'élève : ${score.trim()}`
+        : "Activité H5P terminée par l'élève.";
+    onChangement(detail, true);
+  }
+
+  return (
+    <div className="space-y-4">
+      <ActiviteH5p
+        embedUrl={payload.embedUrl}
+        titre={payload.titre}
+        hauteurInitiale={payload.hauteur}
+      />
+
+      <div className="rounded-2xl border-2 border-dashed border-azur/40 bg-azur/6 px-5 py-4">
+        <label className="flex cursor-pointer items-start gap-3">
+          <input
+            type="checkbox"
+            checked={termine}
+            disabled={verrouille}
+            onChange={(e) => declarer(e.target.checked)}
+            className="mt-0.5 size-5 shrink-0 accent-azur"
+          />
+          <span className="font-titre text-lg leading-tight font-bold">
+            J&apos;ai terminé l&apos;activité ci-dessus
+          </span>
+        </label>
+
+        {payload.demanderScore && termine && (
+          <div className="mt-3.5">
+            <label className="etiquette mb-1.5 block">
+              Quel score as-tu obtenu dans l&apos;activité ? (ex. 8/10)
+            </label>
+            <input
+              value={scoreDeclare}
+              disabled={verrouille}
+              onChange={(e) => {
+                setScoreDeclare(e.target.value);
+                declarer(true, e.target.value);
+              }}
+              placeholder="8/10"
+              className="champ max-w-40"
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Composant principal
 // ---------------------------------------------------------------------------
@@ -545,6 +629,12 @@ export function JoueurExercice({
       )}
       {exercice.type === "question_ouverte" && (
         <ZoneOuverte payload={exercice.payload as OuvertePayload} {...zoneProps} />
+      )}
+      {exercice.type === "video_interactive" && (
+        <ZoneVideo payload={exercice.payload as VideoInteractivePayload} {...zoneProps} />
+      )}
+      {exercice.type === "h5p" && (
+        <ZoneH5p payload={exercice.payload as H5pPayload} {...zoneProps} />
       )}
 
       {erreur && (

@@ -6,6 +6,12 @@ import {
   type PayloadExercice,
   type TypeExercice,
 } from "@/lib/exercices";
+import {
+  normaliserUrlH5p,
+  normaliserUrlImage,
+  normaliserVideo,
+  urlImageValide,
+} from "@/lib/medias";
 
 export type Valide<T> = { ok: true; donnees: T } | { ok: false; erreur: string };
 
@@ -18,6 +24,7 @@ export interface DonneesFable {
   morale: string;
   imageUrl: string;
   audioUrl: string;
+  videoUrl: string;
   difficulte: Difficulte;
   publie: boolean;
   cibleCodeIds: string[];
@@ -29,8 +36,11 @@ export function validerChampsFable(
   const titre = chaine(corps.titre);
   const texte = chaine(corps.texte);
   const morale = chaine(corps.morale);
-  const imageUrl = chaine(corps.imageUrl);
+  // Les liens de partage (Google Drive, Dropbox…) sont convertis en URL
+  // directement affichable : c'est ce qui est stocké en base.
+  const imageUrl = normaliserUrlImage(chaine(corps.imageUrl));
   const audioUrl = chaine(corps.audioUrl);
+  const videoUrl = chaine(corps.videoUrl);
   const difficulteBrute = chaine(corps.difficulte) || "facile";
   const publie = corps.publie === true;
   const cibleBrutes = Array.isArray(corps.cibleCodeIds) ? corps.cibleCodeIds : [];
@@ -46,6 +56,18 @@ export function validerChampsFable(
     return { ok: false, erreur: "La morale est trop longue (300 max.)." };
   if (!DIFFICULTES.includes(difficulteBrute as Difficulte))
     return { ok: false, erreur: "Niveau de difficulté invalide." };
+  if (imageUrl !== "" && !urlImageValide(imageUrl))
+    return {
+      ok: false,
+      erreur:
+        "Lien d'image invalide : collez une adresse commençant par https:// (ou un lien de partage Google Drive).",
+    };
+  if (videoUrl !== "" && normaliserVideo(videoUrl).fournisseur === "inconnu")
+    return {
+      ok: false,
+      erreur:
+        "Lien vidéo non reconnu : utilisez YouTube, Vimeo, Google Drive ou un fichier .mp4.",
+    };
 
   return {
     ok: true,
@@ -55,6 +77,7 @@ export function validerChampsFable(
       morale,
       imageUrl,
       audioUrl,
+      videoUrl,
       difficulte: difficulteBrute as Difficulte,
       publie,
       cibleCodeIds,
@@ -94,9 +117,20 @@ export function validerChampsExercice(
       ? null
       : Math.min(20, Math.max(1, Math.round(Number(maxBrut)) || 1));
 
-  const payload = corps.payload as PayloadExercice;
+  let payload = corps.payload as PayloadExercice;
   if (!payload || typeof payload !== "object")
     return { ok: false, erreur: "Paramètres de l'exercice manquants." };
+
+  // H5P : l'enseignant peut coller le code <iframe> complet ou l'URL de la
+  // page de contenu — on en extrait toujours l'adresse d'intégration.
+  if (type === "h5p") {
+    const p = payload as { embedUrl?: unknown };
+    payload = {
+      ...(payload as object),
+      embedUrl: normaliserUrlH5p(chaine(p.embedUrl)),
+    } as PayloadExercice;
+  }
+
   const erreurPayload = validerPayload(type, payload);
   if (erreurPayload) return { ok: false, erreur: erreurPayload };
 

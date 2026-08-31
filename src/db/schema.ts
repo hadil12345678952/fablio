@@ -80,6 +80,7 @@ export const fables = pgTable(
     morale: text("morale").notNull().default(""),
     imageUrl: text("image_url").notNull().default(""),
     audioUrl: text("audio_url").notNull().default(""),
+    videoUrl: text("video_url").notNull().default(""),
     difficulte: text("difficulte").notNull().default("facile"), // facile | moyen | difficile
     publie: boolean("publie").notNull().default(false),
     // tableau d'ids de codes de parrainage : vide = visible par tous les élèves

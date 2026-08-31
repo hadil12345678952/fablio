@@ -121,6 +121,7 @@ git push -u origin main
    |---|---|
    | `DATABASE_URL` | `postgresql://neondb_owner:<MDP>@ep-xxxx-pooler.<region>.aws.neon.tech/neondb?sslmode=require` *(votre chaîne Neon §2.1)* |
    | `PG_POOL_MAX` *(optionnel)* | `5` |
+   | `OPENAI_API_KEY` *(optionnel)* | clé OpenAI pour une synthèse vocale de meilleure qualité. **Sans cette clé, la lecture à voix haute fonctionne quand même** (service gratuit + voix du navigateur). |
 
 4. Cliquez sur **Deploy**. Le build dure ~1–2 min (les polices Google sont
    téléchargées au build, c'est normal).
@@ -178,6 +179,10 @@ enregistrements DNS indiqués (`CNAME vers cname.vercel-dns.com`). HTTPS automat
 | `relation "fables" does not exist` | schéma non poussé | `DATABASE_URL="…" npx drizzle-kit push` (§2.2) |
 | Build Vercel échoue sur `@/db` « DATABASE_URL is required » | variable manquante au build | l'app ne devrait pas en avoir besoin au build (pages dynamiques) ; si besoin, mettez la variable aussi pour l'environnement **Build** |
 | Pages blanches après modif du schéma | code déployé avant le schéma | repoussez le schéma, puis **Redeploy** |
+| L'image d'une fable ne s'affiche pas | fichier Drive non partagé | Drive → **Partager → Tous les utilisateurs disposant du lien**. Fablio convertit ensuite le lien automatiquement |
+| Bouton « Écouter » muet | service TTS bloqué par le réseau de l'école | l'application bascule seule sur la voix du navigateur ; sinon renseignez `OPENAI_API_KEY` |
+| Activité H5P vide | le site hôte interdit l'intégration (`X-Frame-Options`) | utilisez h5p.org / h5p.com / Lumi, ou autorisez `frame-ancestors *` sur votre Moodle/WordPress |
+| Vidéo YouTube sans pause automatique | lien Drive ou Vimeo | seuls YouTube et les fichiers `.mp4` permettent la pause pilotée |
 
 ---
 

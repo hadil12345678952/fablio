@@ -76,6 +76,7 @@ export default async function PageDetailFable({
             morale: fable.morale,
             imageUrl: fable.imageUrl,
             audioUrl: fable.audioUrl,
+            videoUrl: fable.videoUrl,
             difficulte: fable.difficulte,
             publie: fable.publie,
             cibleCodeIds: fable.cibleCodeIds ?? [],

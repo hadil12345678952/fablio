@@ -1,22 +1,31 @@
 @import "tailwindcss";
 
 @theme {
-  --color-papier: #faf5ea;
-  --color-papier-fonce: #f1e8d4;
-  --color-encre: #29231c;
-  --color-encre-doux: #57513f;
+  --color-papier: #fdf7f3;
+  --color-papier-fonce: #f7e9e6;
+  --color-encre: #2a2340;
+  --color-encre-doux: #5c5474;
+
+  /* --- Trio principal, pensé pour les enfants : rose · vert · bleu --- */
+  --color-rose: #f2589b;
+  --color-rose-fonce: #d33a7e;
+  --color-menthe: #22b573;
+  --color-menthe-fonce: #16915b;
+  --color-azur: #3d9ae8;
+  --color-azur-fonce: #2778c0;
+
+  /* --- Couleurs de soutien (espace enseignant, accents) --- */
   --color-corail: #e4572e;
   --color-corail-fonce: #c2431d;
   --color-sarcelle: #2f7d6b;
   --color-sarcelle-fonce: #22614f;
   --color-ambre: #f2a93b;
-  --color-ambre-fonce: #d18d20;
+  --color-ambre-fonce: #cf860f;
   --color-lilas: #7c6bd6;
-  --color-rose: #e86a92;
   --color-ciel: #4f96c8;
 
-  --shadow-carte: 0 1px 0 rgba(41, 35, 28, 0.05), 0 14px 34px -16px rgba(41, 35, 28, 0.22);
-  --shadow-pop: 0 4px 0 rgba(41, 35, 28, 0.9);
+  --shadow-carte: 0 1px 0 rgba(42, 35, 64, 0.05), 0 14px 34px -16px rgba(42, 35, 64, 0.24);
+  --shadow-pop: 0 4px 0 rgba(42, 35, 64, 0.9);
   --radius-bulle: 1.5rem;
 }
 
@@ -31,7 +40,7 @@ body {
 }
 
 ::selection {
-  background: color-mix(in srgb, var(--color-corail) 25%, transparent);
+  background: color-mix(in srgb, var(--color-rose) 28%, transparent);
 }
 
 /* Familles de polices */
@@ -44,12 +53,25 @@ body {
 
 /* Texture papier pointillée */
 .bg-points {
-  background-image: radial-gradient(rgba(41, 35, 28, 0.09) 1px, transparent 1px);
+  background-image: radial-gradient(rgba(42, 35, 64, 0.08) 1px, transparent 1px);
   background-size: 22px 22px;
 }
 .bg-points-clair {
-  background-image: radial-gradient(rgba(250, 245, 234, 0.16) 1.2px, transparent 1.2px);
+  background-image: radial-gradient(rgba(253, 247, 243, 0.18) 1.2px, transparent 1.2px);
   background-size: 20px 20px;
+}
+
+/* Fond arc-en-ciel doux pour l'accueil et l'espace élève */
+.bg-arc-enfant {
+  background:
+    radial-gradient(60rem 32rem at 12% -8%, color-mix(in srgb, var(--color-rose) 22%, transparent), transparent 70%),
+    radial-gradient(52rem 30rem at 92% 4%, color-mix(in srgb, var(--color-azur) 20%, transparent), transparent 70%),
+    radial-gradient(46rem 30rem at 50% 100%, color-mix(in srgb, var(--color-menthe) 18%, transparent), transparent 72%);
+}
+
+/* Bandeau de séparation ondulé */
+.vague-bas {
+  clip-path: ellipse(140% 100% at 50% 0%);
 }
 
 /* Utilitaires composés réutilisables via @apply (Tailwind v4) */
@@ -58,10 +80,10 @@ body {
   box-shadow: var(--shadow-carte);
 }
 @utility btn {
-  @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold transition-all duration-200 select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-corail active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50;
+  @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold transition-all duration-200 select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50;
 }
 @utility champ {
-  @apply w-full rounded-xl border-2 border-encre/15 bg-white px-4 py-2.5 text-[15px] font-semibold transition-colors outline-none placeholder:font-normal placeholder:text-encre/35 focus:border-corail;
+  @apply w-full rounded-xl border-2 border-encre/15 bg-white px-4 py-2.5 text-[15px] font-semibold transition-colors outline-none placeholder:font-normal placeholder:text-encre/35 focus:border-rose;
 }
 @utility etiquette {
   @apply text-[11px] font-extrabold tracking-[0.14em] text-encre/45 uppercase;
@@ -72,16 +94,22 @@ body {
 
 @layer components {
   .btn-primaire {
-    @apply btn bg-corail text-white hover:bg-corail-fonce;
+    @apply btn bg-rose text-white hover:bg-rose-fonce;
   }
   .btn-encre {
     @apply btn bg-encre text-papier hover:bg-encre-doux;
+  }
+  .btn-menthe {
+    @apply btn bg-menthe text-white hover:bg-menthe-fonce;
+  }
+  .btn-azur {
+    @apply btn bg-azur text-white hover:bg-azur-fonce;
   }
   .btn-sarcelle {
     @apply btn bg-sarcelle text-white hover:bg-sarcelle-fonce;
   }
   .btn-ligne {
-    @apply btn border-2 border-encre/15 bg-white text-encre hover:border-encre/45 hover:bg-papier;
+    @apply btn border-2 border-encre/15 bg-white text-encre hover:border-rose/60 hover:bg-papier;
   }
   .btn-fantome {
     @apply btn text-encre-doux hover:bg-encre/5;

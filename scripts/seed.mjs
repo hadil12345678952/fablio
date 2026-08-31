@@ -28,6 +28,8 @@ const T = {
   exAssocCorbeau: "44444444-4444-4000-8000-444444444445",
   exQcmLievre: "44444444-4444-4000-8000-444444444446",
   exOuverteLievre: "44444444-4444-4000-8000-444444444447",
+  exVideoLievre: "44444444-4444-4000-8000-444444444448",
+  exH5pCorbeau: "44444444-4444-4000-8000-444444444449",
   lina: "55555555-5555-4000-8000-555555555551",
   samy: "55555555-5555-4000-8000-555555555552",
   nour: "55555555-5555-4000-8000-555555555553",
@@ -147,6 +149,8 @@ async function main() {
   );
 
   // --- Fables ---------------------------------------------------------------
+  const VIDEO_LIEVRE = "https://www.youtube.com/watch?v=ydY5GH0bULU";
+
   const fablesData = [
     [
       T.fableCigale,
@@ -155,6 +159,7 @@ async function main() {
       "Il faut travailler aujourd'hui pour ne manquer de rien demain.",
       "/images/fables/cigale-fourmi.jpg",
       "facile",
+      "",
     ],
     [
       T.fableCorbeau,
@@ -163,6 +168,7 @@ async function main() {
       "Méfie-toi des flatteurs : ils profitent de ta vanité.",
       "/images/fables/corbeau-renard.jpg",
       "moyen",
+      "",
     ],
     [
       T.fableLievre,
@@ -171,13 +177,14 @@ async function main() {
       "Rien ne sert de courir ; il faut partir à point.",
       "/images/fables/lievre-tortue.jpg",
       "facile",
+      VIDEO_LIEVRE,
     ],
   ];
-  for (const [id, titre, texte, morale, imageUrl, difficulte] of fablesData) {
+  for (const [id, titre, texte, morale, imageUrl, difficulte, videoUrl] of fablesData) {
     await client.query(
-      `INSERT INTO fables (id, enseignant_id, titre, texte, morale, image_url, difficulte, publie)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, true) ON CONFLICT (id) DO NOTHING`,
-      [id, T.enseignant, titre, texte, morale, imageUrl, difficulte]
+      `INSERT INTO fables (id, enseignant_id, titre, texte, morale, image_url, difficulte, video_url, publie)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true) ON CONFLICT (id) DO NOTHING`,
+      [id, T.enseignant, titre, texte, morale, imageUrl, difficulte, videoUrl]
     );
   }
 
@@ -309,6 +316,56 @@ async function main() {
       "",
       1,
     ],
+    [
+      T.exVideoLievre,
+      T.fableLievre,
+      "video_interactive",
+      "Regarde la vidéo : elle s'arrêtera pour te poser des questions.",
+      {
+        videoUrl: VIDEO_LIEVRE,
+        arrets: [
+          {
+            temps: 25,
+            question: "Qui propose le pari de la course ?",
+            options: ["La Tortue", "Le Lièvre", "Le Renard"],
+            correct: 0,
+            explication: "C'est la Tortue qui lance le défi au Lièvre.",
+          },
+          {
+            temps: 70,
+            question: "Que fait le Lièvre pendant que la Tortue avance ?",
+            options: [
+              "Il court le plus vite possible",
+              "Il broute, se repose et s'amuse",
+              "Il aide la Tortue",
+            ],
+            correct: 1,
+            explication: "Il perd son temps car il se croit sûr de gagner.",
+          },
+        ],
+      },
+      20,
+      "Superbe ! Tu as bien suivi toute l'histoire.",
+      "Regarde à nouveau ce passage de la vidéo.",
+      2,
+    ],
+    [
+      T.exH5pCorbeau,
+      T.fableCorbeau,
+      "h5p",
+      "Fais l'activité interactive, puis coche la case quand tu as terminé.",
+      {
+        embedUrl: "https://h5p.org/h5p/embed/1396",
+        titre: "Complète les phrases (activité H5P)",
+        hauteur: 420,
+        validationAutomatique: false,
+        demanderScore: true,
+      },
+      10,
+      "",
+      "",
+      2,
+    ],
   ];
   for (const [id, fableId, type, consigne, payload, points, fc, fi, ordre] of exercicesData) {
     await client.query(
@@ -376,6 +433,21 @@ async function main() {
       1,
       110,
       1,
+    ],
+    // Vidéo interactive : lina répond juste aux deux arrêts, samy se trompe une fois
+    [T.lina, T.exVideoLievre, T.fableLievre, [0, 1], 20, true, 1, 140, 1],
+    [T.samy, T.exVideoLievre, T.fableLievre, [1, 1], 10, false, 1, 155, 1],
+    // Activité H5P : en attente de correction par l'enseignant
+    [
+      T.lina,
+      T.exH5pCorbeau,
+      T.fableCorbeau,
+      "Activité H5P terminée — score annoncé par l'élève : 9/10",
+      null,
+      null,
+      1,
+      210,
+      2,
     ],
   ];
   for (const [eleveId, exoId, fableId, reponse, score, ok, numero, duree, jours] of tentativesData) {
