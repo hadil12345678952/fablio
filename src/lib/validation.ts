@@ -93,6 +93,7 @@ export interface DonneesExercice {
   feedbackIncorrect: string;
   publie: boolean;
   maxTentatives: number | null;
+  moodleQuizId: number | null;
   payload: PayloadExercice;
 }
 
@@ -116,6 +117,15 @@ export function validerChampsExercice(
     maxBrut === null || maxBrut === undefined || maxBrut === ""
       ? null
       : Math.min(20, Math.max(1, Math.round(Number(maxBrut)) || 1));
+  // Liaison facultative à un quiz Moodle existant (ID numérique dans Moodle).
+  const quizBrut = corps.moodleQuizId;
+  let moodleQuizId: number | null = null;
+  if (quizBrut !== null && quizBrut !== undefined && quizBrut !== "") {
+    const n = Math.round(Number(quizBrut));
+    if (!Number.isInteger(n) || n <= 0 || n > 1_000_000_000)
+      return { ok: false, erreur: "L'identifiant du quiz Moodle doit être un nombre entier positif." };
+    moodleQuizId = n;
+  }
 
   let payload = corps.payload as PayloadExercice;
   if (!payload || typeof payload !== "object")
@@ -144,6 +154,7 @@ export function validerChampsExercice(
       feedbackIncorrect,
       publie,
       maxTentatives,
+      moodleQuizId,
       payload,
     },
   };

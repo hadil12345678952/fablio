@@ -8,6 +8,7 @@ import {
   Ticket,
   Users,
   BarChart3,
+  Plug,
 } from "lucide-react";
 
 const LIENS = [
@@ -16,6 +17,7 @@ const LIENS = [
   { href: "/enseignant/codes", label: "Codes de classe", icone: Ticket, exact: false },
   { href: "/enseignant/eleves", label: "Mes élèves", icone: Users, exact: false },
   { href: "/enseignant/statistiques", label: "Statistiques", icone: BarChart3, exact: false },
+  { href: "/enseignant/integrations", label: "Moodle (LMS)", icone: Plug, exact: false },
 ];
 
 export function NavEnseignant() {

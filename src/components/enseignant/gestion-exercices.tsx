@@ -68,6 +68,7 @@ export interface ExerciceEditable {
   ordre: number;
   publie: boolean;
   maxTentatives: number | null;
+  moodleQuizId?: number | null;
 }
 
 const ICONES_TYPES: Record<TypeExercice, typeof ListChecks> = {
@@ -125,6 +126,9 @@ function FormulaireExercice({
   const [feedbackIncorrect, setFeedbackIncorrect] = useState(initial?.feedbackIncorrect ?? "");
   const [maxTentatives, setMaxTentatives] = useState(
     initial?.maxTentatives ? String(initial.maxTentatives) : ""
+  );
+  const [quizMoodle, setQuizMoodle] = useState(
+    initial?.moodleQuizId ? String(initial.moodleQuizId) : ""
   );
   const [publie, setPublie] = useState(initial?.publie ?? true);
 
@@ -301,6 +305,7 @@ function FormulaireExercice({
       feedbackIncorrect,
       publie,
       maxTentatives: maxTentatives === "" ? null : Number(maxTentatives),
+      moodleQuizId: quizMoodle === "" ? null : Number(quizMoodle),
     };
     try {
       const res = await fetch(
@@ -1042,6 +1047,26 @@ function FormulaireExercice({
         />
         Exercice publié (visible par les élèves)
       </label>
+
+      {/* Liaison Moodle (facultative) */}
+      <div className="mt-4 rounded-2xl border-2 border-dashed border-encre/15 bg-papier px-4 py-3.5">
+        <label className="etiquette mb-1.5 block">Lien avec un quiz Moodle (facultatif)</label>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <input
+            type="number"
+            min={1}
+            value={quizMoodle}
+            onChange={(e) => setQuizMoodle(e.target.value)}
+            placeholder="ID du quiz dans Moodle, ex. 42"
+            className="champ max-w-56"
+          />
+          <span className="text-xs font-semibold text-encre/50">
+            Si Moodle est connecté (page « Intégration Moodle »), les tentatives faites dans
+            Moodle sur ce quiz s&apos;afficheront dans les statistiques de cet exercice. Laissez
+            vide sinon.
+          </span>
+        </div>
+      </div>
 
       {erreur && (
         <p className="mt-4 rounded-xl border-2 border-rose/30 bg-rose/10 px-4 py-2.5 text-sm font-bold text-rose">

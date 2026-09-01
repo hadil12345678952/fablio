@@ -115,6 +115,8 @@ export const exercices = pgTable(
     ordre: integer("ordre").notNull().default(0),
     publie: boolean("publie").notNull().default(true),
     maxTentatives: integer("max_tentatives"), // null = illimité
+    // Lien facultatif vers un quiz Moodle créé dans Moodle (source de vérité).
+    moodleQuizId: integer("moodle_quiz_id"),
     creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("idx_exercices_fable").on(t.fableId)]
@@ -151,6 +153,59 @@ export const tentatives = pgTable(
     index("idx_tentatives_fable").on(t.fableId),
   ]
 );
+
+// ---------------------------------------------------------------------------
+// Intégration Moodle — liaisons uniquement, AUCUNE donnée pédagogique dupliquée
+// (Moodle reste la source de vérité : cours, comptes, tentatives, notes).
+// Ces tables sont additives : l'application fonctionne sans elles.
+// ---------------------------------------------------------------------------
+
+// Correspondance comptes plateforme ↔ comptes Moodle (un seul compte Moodle
+// par utilisateur plateforme : synchronisation idempotente garantie ici).
+export const liensMoodleUtilisateurs = pgTable(
+  "liens_moodle_utilisateurs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    typeUtilisateur: text("type_utilisateur").notNull(), // enseignant | eleve
+    utilisateurId: uuid("utilisateur_id").notNull(), // id plateforme
+    moodleUserId: integer("moodle_user_id").notNull(),
+    identifiantMoodle: text("identifiant_moodle").notNull().default(""),
+    creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uq_liens_moodle_u_plateforme").on(t.typeUtilisateur, t.utilisateurId),
+    uniqueIndex("uq_liens_moodle_u_moodle").on(t.moodleUserId),
+  ]
+);
+
+// Classe plateforme (code de parrainage) ↔ cours Moodle
+export const liensMoodleCours = pgTable(
+  "liens_moodle_cours",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    codeId: uuid("code_id")
+      .notNull()
+      .references(() => codesParrainage.id, { onDelete: "cascade" }),
+    moodleCourseId: integer("moodle_course_id").notNull(),
+    titreCours: text("titre_cours").notNull().default(""),
+    identifiantCours: text("identifiant_cours").notNull().default(""),
+    creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uq_liens_moodle_c_code").on(t.codeId),
+    uniqueIndex("uq_liens_moodle_c_moodle").on(t.moodleCourseId),
+  ]
+);
+
+// Journal des opérations de synchronisation (200 dernières retenues).
+export const journalMoodle = pgTable("journal_moodle", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  operation: text("operation").notNull(), // tester | utilisateurs | cours | quiz
+  statut: text("statut").notNull(), // ok | erreur | info
+  message: text("message").notNull(),
+  details: text("details").notNull().default(""),
+  creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
+});
 
 // ---------------------------------------------------------------------------
 // Sessions (cookie httpOnly)

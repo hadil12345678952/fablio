@@ -371,6 +371,7 @@ export interface StatsExercice {
   consigne: string;
   resume: string;
   points: number;
+  moodleQuizId: number | null;
   tentatives: number;
   elevesDistincts: number;
   tauxReussite: number;
@@ -541,6 +542,7 @@ export async function statsFable(
       consigne: exo.consigne,
       resume: resumeExercice(exo),
       points: exo.points,
+      moodleQuizId: exo.moodleQuizId ?? null,
       tentatives: de.length,
       elevesDistincts: new Set(de.map((t) => t.eleveId)).size,
       tauxReussite: corrigees.length

@@ -88,6 +88,7 @@ export interface ExerciceEnseignant {
   ordre: number;
   publie: boolean;
   maxTentatives: number | null;
+  moodleQuizId: number | null;
 }
 
 export function versExerciceEnseignant(e: ExerciceRow): ExerciceEnseignant {
@@ -105,6 +106,7 @@ export function versExerciceEnseignant(e: ExerciceRow): ExerciceEnseignant {
     ordre: e.ordre,
     publie: e.publie,
     maxTentatives: e.maxTentatives,
+    moodleQuizId: e.moodleQuizId ?? null,
   };
 }
 
