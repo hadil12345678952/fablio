@@ -9,6 +9,10 @@ import {
   type ReponseEleve,
   type TypeExercice,
 } from "@/lib/exercices";
+import { moodleConfigure } from "@/integrations/moodle";
+import { noterDansMoodle } from "@/integrations/moodle/creation";
+import { estMappableMoodle } from "@/integrations/moodle/conversion";
+import type { ScoreMoodle } from "@/integrations/moodle/creation";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -87,6 +91,22 @@ export async function POST(req: Request, ctx: Ctx) {
   const correction =
     note.estCorrect === false ? corrigeExercice(type, exo.payload) : [];
 
+  // --- Moteur Moodle : si l'exercice est lié à un quiz, Moodle fournit la   ---
+  // note (source de vérité). En cas d'indisponibilité, on conserve la note   ---
+  // native : la plateforme reste utilisable (mode dégradé).                  ---
+  let moodle: ScoreMoodle | null = null;
+  if (
+    moodleConfigure() &&
+    exo.moodleQuizId !== null &&
+    estMappableMoodle(type)
+  ) {
+    try {
+      moodle = await noterDansMoodle(fable.enseignantId, eleve.id, exo, reponse);
+    } catch (err) {
+      console.error("[moodle] notation impossible, score natif conservé :", err);
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     resultat: {
@@ -101,6 +121,7 @@ export async function POST(req: Request, ctx: Ctx) {
         exo.maxTentatives === null
           ? null
           : Math.max(0, exo.maxTentatives - (deja.length + 1)),
+      moodle,
     },
   });
 }

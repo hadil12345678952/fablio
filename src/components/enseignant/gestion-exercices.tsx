@@ -25,6 +25,7 @@ import {
   ExternalLink,
   Info,
   Check,
+  Plug,
 } from "lucide-react";
 import {
   DESCRIPTIONS_TYPES,
@@ -53,6 +54,7 @@ import {
   secondesEnTemps,
   tempsEnSecondes,
 } from "@/lib/medias";
+import { estMappableMoodle } from "@/integrations/moodle/conversion";
 import { JoueurExercice } from "@/components/exercice/joueur-exercice";
 
 export interface ExerciceEditable {
@@ -1148,7 +1150,36 @@ export function GestionExercices({
   const [nouveauType, setNouveauType] = useState<TypeExercice | null>(null);
   const [apercuId, setApercuId] = useState<string | null>(null);
   const [enCours, setEnCours] = useState(false);
+  const [moodlePush, setMoodlePush] = useState<string | null>(null);
+  const [moodleMsg, setMoodleMsg] = useState<Record<string, string>>({});
   const router = useRouter();
+
+  async function pousserVersMoodle(exo: ExerciceEditable) {
+    setMoodlePush(exo.id);
+    setMoodleMsg({});
+    try {
+      const res = await fetch("/api/integrations/moodle/activite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ exerciceId: exo.id }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.cree) {
+        setMoodleMsg((m) => ({
+          ...m,
+          [exo.id]: json.resultat?.raison ?? json.erreur ?? "Création impossible.",
+        }));
+      } else {
+        setMoodleMsg((m) => ({
+          ...m,
+          [exo.id]: `Quiz Moodle n°${json.resultat.quizId} créé — ${json.resultat.questionCount} question(s).`,
+        }));
+      }
+      router.refresh();
+    } finally {
+      setMoodlePush(null);
+    }
+  }
 
   const tries = [...exercices].sort((a, b) => a.ordre - b.ordre);
 
@@ -1265,11 +1296,44 @@ export function GestionExercices({
                 <button type="button" onClick={() => setEditionId(exo.id)} className="btn-ligne px-3 py-1.5 text-xs">
                   <Pencil className="size-3.5" /> Modifier
                 </button>
+                {estMappableMoodle(exo.type) && (
+                  <button
+                    type="button"
+                    onClick={() => pousserVersMoodle(exo)}
+                    disabled={moodlePush !== null}
+                    className="btn-ligne px-3 py-1.5 text-xs"
+                    title={
+                      exo.moodleQuizId
+                        ? "Recréer / lier le quiz Moodle"
+                        : "Créer le quiz Moodle depuis cet exercice"
+                    }
+                  >
+                    {moodlePush === exo.id ? (
+                      <LoaderCircle className="size-3.5 animate-spin" />
+                    ) : exo.moodleQuizId ? (
+                      <Plug className="size-3.5 text-menthe-fonce" />
+                    ) : (
+                      <Plug className="size-3.5" />
+                    )}
+                    {exo.moodleQuizId ? "Moodle n°" + exo.moodleQuizId : "Envoyer à Moodle"}
+                  </button>
+                )}
                 <button type="button" onClick={() => supprimer(exo)} disabled={enCours} className="btn-fantome px-2 py-1.5 text-corail hover:bg-corail/10" title="Supprimer">
                   <Trash2 className="size-4.5" />
                 </button>
               </div>
             </div>
+            {moodleMsg[exo.id] && (
+              <p
+                className={`mt-3 rounded-xl px-4 py-2.5 text-sm font-bold ${
+                  exo.moodleQuizId && !moodleMsg[exo.id].startsWith("Quiz")
+                    ? "bg-ambre/12 text-ambre-fonce"
+                    : "bg-menthe/10 text-menthe-fonce"
+                }`}
+              >
+                {moodleMsg[exo.id]}
+              </p>
+            )}
             {apercuId === exo.id && (
               <div className="anim-apparition mt-4 border-t-2 border-dashed border-encre/10 pt-4">
                 <JoueurExercice

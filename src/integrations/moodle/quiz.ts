@@ -50,51 +50,57 @@ export async function tentativesDepuisMoodle(
       tentatives: [],
     };
 
-  const reponse = await appelerMoodle<{ attempts?: TentativeMoodle[] }>(
-    "mod_quiz_get_user_attempts",
-    { quizid: quizId, userid: 0, status: "finished", includepreview: 0 }
-  );
-  const tentatives = reponse.attempts ?? [];
+  // Note / progression issues du plugin local_fablio (source de vérité).
+  const detail = await appelerMoodle<{
+    quizid: number;
+    name: string;
+    maxgrade: number;
+    sumgrades: number;
+    questioncount: number;
+  }>("local_fablio_get_quiz_detail", { quizid: quizId });
 
-  // Résolution des noms d'utilisateurs (appel groupé).
-  const ids = [...new Set(tentatives.map((t) => t.userid))].slice(0, 60);
-  const noms = new Map<number, string>();
-  if (ids.length > 0) {
-    try {
-      const utilisateurs = await appelerMoodle<
-        { id: number; username?: string; firstname?: string; lastname?: string }[]
-      >("core_user_get_users_by_field", { field: "id", values: ids });
-      for (const u of utilisateurs ?? []) {
-        noms.set(u.id, [u.firstname, u.lastname].filter(Boolean).join(" ") || (u.username ?? `#${u.id}`));
-      }
-    } catch {
-      // Les identifiants bruts seront affichés.
-    }
-  }
+  const brut = await appelerMoodle<
+    {
+      attemptid: number;
+      userid: number;
+      username: string;
+      firstname: string;
+      lastname: string;
+      attempt: number;
+      grade: number;
+      maxgrade: number;
+      percent: number;
+      timecreated: number;
+    }[]
+  >("local_fablio_get_attempts", { quizid: quizId });
 
-  const totalPoints = quiz.sumgrades ?? 0;
-  const noteMaxQuiz = quiz.grade ?? 0;
+  const nom = detail.name || quiz.name || `Quiz n°${quizId}`;
+  const noteMaxQuiz = detail.maxgrade || quiz.grade || 0;
 
   return {
-    quiz: { id: quiz.id, nom: quiz.name ?? `Quiz n°${quiz.id}`, noteMax: noteMaxQuiz, totalPoints },
-    tentatives: tentatives
-      .sort((a, b) => (a.userid - b.userid) || ((a.attempt ?? 0) - (b.attempt ?? 0)))
+    quiz: {
+      id: quizId,
+      nom,
+      noteMax: noteMaxQuiz,
+      totalPoints: detail.sumgrades || 0,
+    },
+    tentatives: brut
       .map((t) => {
-        const brut = t.sumgrades ?? null;
-        const noteFinale =
-          brut !== null && totalPoints > 0
-            ? Math.round(((brut / totalPoints) * noteMaxQuiz) * 100) / 100
-            : null;
+        const utilisateur =
+          [t.firstname, t.lastname].filter(Boolean).join(" ").trim() ||
+          t.username ||
+          `utilisateur #${t.userid}`;
         return {
-          tentativeId: t.id,
-          utilisateur: noms.get(t.userid) ?? `utilisateur #${t.userid}`,
-          numero: t.attempt ?? 1,
-          etat: t.state ?? "finished",
-          note: noteFinale,
-          noteSur: noteMaxQuiz || null,
-          debutLe: dateFr(t.timestart),
-          finLe: dateFr(t.timefinish),
+          tentativeId: t.attemptid,
+          utilisateur,
+          numero: t.attempt,
+          etat: "finished",
+          note: t.grade,
+          noteSur: t.maxgrade || noteMaxQuiz || null,
+          debutLe: null,
+          finLe: dateFr(t.timecreated),
         };
-      }),
+      })
+      .sort((a, b) => a.utilisateur.localeCompare(b.utilisateur, "fr") || a.numero - b.numero),
   };
 }

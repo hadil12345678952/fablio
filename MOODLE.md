@@ -50,15 +50,11 @@ fonctionne **exactement** comme avant (mode dégradé par conception).
 | Vidéo interactive | *(pas d'équivalent natif)* | Reste plateforme |
 | Activité H5P | H5P via onglet d'intégration Fablio | Reste plateforme |
 
-> **Contrainte du protocole officiel (documentée)** : les web services *cœur* de
-> Moodle ne permettent **pas** de créer des quiz / banques de questions à distance,
-> et `mod_quiz_start_attempt` / `save_attempt` s'exécutent **au nom de l'utilisateur
-> du jeton** (impossible de faire passer une tentative « pour » un autre élève avec
-> un jeton unique). Options d'évolution, sans changer d'architecture :
-> 1. créer les quiz dans Moodle (interface Moodle) puis les lier via `moodleQuizId` ;
-> 2. émettre un jeton **par utilisateur** Moodle (SSO de tentatives) ;
-> 3. installer un **plugin Moodle local** (ex. `local_wsquiz`) exposant la création
->    de questions — la couche `src/integrations/moodle` est prête pour ces fonctions.
+> **Résolution de la contrainte WS cœur** : le plugin **`local/fablio`**
+> (voir _Évolution — moteur pédagogique_) expose les fonctions de création de
+> quiz/questions et de notation, que la couche Fablio appelle. **Plus aucun
+> copier-coller d'ID Moodle** : l'enseignant crée ses activités depuis Fablio et
+> Fablio stocke seul le mapping `exercices.moodle_quiz_id`.
 
 ## 4. Mise en place côté Moodle (une fois)
 
@@ -144,4 +140,68 @@ curl http://127.0.0.1:8901/__etat   # assertions : utilisateurs/cous créés
 | `GET /api/integrations/moodle/statut` | État (config, liaisons, journal) — enseignant |
 | `POST /api/integrations/moodle/tester` | Test jeton + joignabilité (`get_site_info`) |
 | `POST /api/integrations/moodle/synchroniser` | Comptes + cours + inscriptions (idempotent) |
+| `POST /api/integrations/moodle/activite` | **Crée le quiz + questions Moodle depuis un exercice** (aucun ID à saisir) |
+| `POST /api/integrations/moodle/migrer` | **Migration** des exercices existants vers Moodle |
 | `GET /api/integrations/moodle/quiz/[id]/tentatives` | Tentatives + notes d'un quiz lié |
+
+---
+
+# ÉVOLUTION — Moodle comme véritable moteur pédagogique
+
+## A. Principe
+
+L'enseignant crée son activité **uniquement dans Fablio** (fable, niveau,
+compétence, type, questions, réponses, points). Fablio appelle le plugin
+`local_fablio`, qui crée le quiz + les questions dans Moodle, renvoie l'ID, et
+Fablo le stocke. L'élève reste dans Fablio ; à la validation, Fablio transmet la
+réponse au plugin, **Moodle corrige et calcule la note** (source de vérité), puis
+Fablo l'affiche dans ses dashboards.
+
+## B. Web services du plugin `local_fablio`
+
+| Fonction | Création/lecture | But |
+|---|---|---|
+| `local_fablio_create_quiz` | write | quiz + coursemoduleid |
+| `local_fablio_create_question` | write | question (banque) + ajout au quiz |
+| `local_fablio_get_quiz_detail` / `list_quizzes` | read | détail, barème, questions |
+| `local_fablio_set_quiz_visible` | write | publier / dépublier |
+| `local_fablio_submit_attempt` | write | corrige une tentative, renvoie note |
+| `local_fablio_get_attempts` / `get_progress` | read | notes et progression |
+
+## C. Correspondance Fablio → Moodle (automatique)
+
+| Type Fablio | Question Moodle | Push |
+|---|---|---|
+| QCM | `multichoice` | ✅ automatique |
+| Vrai / Faux | `truefalse` | ✅ automatique |
+| Question courte (auto) | `shortanswer` | ✅ automatique |
+| Texte à trous | N × `shortanswer` (un par trou) | ✅ automatique |
+| Association | `matching` | à venir |
+| Ordre / Vidéo interactive / H5P | — | reste Fablio (moteur natif) |
+
+## D. Installation du plugin
+
+Voir `local/fablio/README.md` : copier `local/fablio` dans `/local`, purger les
+caches, installer via **Notifications**, puis configurer le service `fablio-ws`
+(Activer web services → REST → Service externe `fablio-ws` → Jeton pour
+`svc-fablio` qui possède `local/fablio:manage` et `:view`).
+
+## E. Création d'une activité (côté Fablio)
+
+1. Fiche fable → « Envoyer à Moodle » sur un exercice convertible (QCM, V/F,
+   réponse courte auto, texte à trous) → Fablio crée quiz + questions.
+2. Le bouton affiche alors « Moodle n°X » (re-cliquer recrée/relie).
+3. « Tout synchroniser » (route `/migrer`) migre progressivement les exercices
+   existants non encore liés.
+4. À la soumission d'un exercice lié, Fablio demande la note au plugin : si
+   Moodle est indisponible, **le score natif Fablio est conservé** (mode dégradé).
+
+## F. Limites connues
+
+- Correcteur autonome (table `local_fablio_results`) : les quiz/questions créés
+  sont réels et éditables dans la banque ; la note vient de ce moteur interne.
+- `association`, `ordre`, `video_interactive`, `h5p` restent natifs Fablio.
+- Un quiz Moodle = un exercice Fablio, hébergé dans le cours de la première
+  classe ciblée (ciblage multi-classes à venir).
+- Plugin validé par **harnais** (`node scripts/mock-moodle.mjs`) ; à ré-éprouver
+  sur l'instance Moodle 4.5 réelle (PHP 8.1–8.3) avant mise en production.
