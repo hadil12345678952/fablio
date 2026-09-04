@@ -93,7 +93,8 @@ export function EditeurPedagogique({
     }
   }, [fableId]);
 
-  /** Action API générique puis rechargement */
+  /** Action API générique puis rechargement — robuste : ignore les 4xx métier
+   *  sans boucle sans fin (affiche une erreur lisible une seule fois). */
   async function action(
     promesse: Promise<Response>,
     options?: { silent?: boolean; sauvegarde?: boolean }
@@ -103,9 +104,21 @@ export function EditeurPedagogique({
     try {
       const res = await promesse;
       if (!res.ok) {
-        const json = await res.json().catch(() => ({}));
-        alert(json.erreur ?? "Une erreur est survenue.");
-        if (options?.sauvegarde) setSauvegarde("erreur");
+        const json = (await res.json().catch(() => ({}))) as {
+          erreur?: string;
+          detailsValidation?: string[];
+        };
+        const message = json.erreur ?? `Erreur ${res.status}`;
+        if (options?.sauvegarde) {
+          setSauvegarde("erreur");
+          console.warn("[éditeur-blocs sauvegarde auto]", message);
+        } else {
+          alert(
+            Array.isArray(json.detailsValidation) && json.detailsValidation.length
+              ? message + "\n\n" + json.detailsValidation.slice(0, 6).join("\n")
+              : message
+          );
+        }
         return;
       }
       await rafraicher();

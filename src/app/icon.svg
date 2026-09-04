@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#F2589B"/>
+  <!-- Livre ouvert stylisé -->
+  <path d="M12 20c6-2.5 12-2.5 16 0v26c-4-2.5-10-2.5-16 0z" fill="#fff"/>
+  <path d="M52 20c-6-2.5-12-2.5-16 0v26c4-2.5 10-2.5 16 0z" fill="#fff"/>
+  <path d="M32 20v26" stroke="#f2589b" stroke-width="2" stroke-linecap="round"/>
+  <text x="32" y="42" text-anchor="middle" font-family="sans-serif" font-size="26" font-weight="700" fill="#F2589B">F</text>
+</svg>
