@@ -22,8 +22,14 @@ export function ActionsFable({
     try {
       const res = await promesse;
       if (!res.ok) {
-        const json = (await res.json().catch(() => ({}))) as { erreur?: string };
-        alert(json.erreur ?? "Une erreur est survenue.");
+        const json = (await res.json().catch(() => ({}))) as {
+          erreur?: string;
+          detailsValidation?: string[];
+        };
+        const detail = json.detailsValidation?.length
+          ? "\n\n" + json.detailsValidation.slice(0, 6).join("\n")
+          : "";
+        alert((json.erreur ?? "Une erreur est survenue.") + detail);
       }
       router.refresh();
     } finally {

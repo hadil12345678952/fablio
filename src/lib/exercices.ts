@@ -35,7 +35,7 @@ export const DESCRIPTIONS_TYPES: Record<TypeExercice, string> = {
   question_ouverte: "Réponse libre courte, corrigée automatiquement ou par l'enseignant.",
   video_interactive:
     "Une vidéo qui s'arrête aux moments choisis pour poser une question à l'élève.",
-  h5p: "Une activité H5P externe (h5p.org, Lumi, Moodle…) intégrée à la fable.",
+  h5p: "Une activité H5P externe (h5p.org, Lumi…) intégrée à la fable.",
 };
 
 // ----- Payloads par type ---------------------------------------------------

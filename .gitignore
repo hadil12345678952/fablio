@@ -25,3 +25,10 @@ yarn-debug.log*
 yarn-error.log*
 .turbo
 .vercel
+
+# Sauvegardes locales (dumps + exports) — hors dépôt : contiennent des hachages
+/sauvegardes/
+
+# Artefacts de compilation
+tsconfig.tsbuildinfo
+*.tsbuildinfo

@@ -5,7 +5,7 @@ import { ExternalLink, Maximize2, PuzzleIcon, TriangleAlert } from "lucide-react
 
 // ---------------------------------------------------------------------------
 // Intégration d'une activité H5P hébergée à l'extérieur (h5p.org, h5p.com,
-// Lumi, Moodle, WordPress…).
+// Lumi, WordPress…).
 //
 // H5P communique avec la page hôte par `postMessage` (protocole du script
 // officiel h5p-resizer.js). On réimplémente ici la partie utile — le

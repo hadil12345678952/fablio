@@ -170,7 +170,7 @@ export function secondesEnTemps(secondes: number): string {
 /**
  * Extrait l'URL d'intégration H5P depuis :
  *  - un code <iframe src="…/embed"> complet copié depuis H5P,
- *  - une URL d'embed directe (h5p.org, h5p.com, Lumi, Moodle, WordPress…),
+ *  - une URL d'embed directe (h5p.org, h5p.com, Lumi, WordPress, LMS…),
  *  - une URL de page de contenu h5p.org (convertie en /h5p/embed/ID).
  */
 export function normaliserUrlH5p(saisie: string): string {

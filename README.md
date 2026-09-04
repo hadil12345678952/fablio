@@ -12,9 +12,8 @@ erreurs fréquentes, export CSV/PDF).
 |---|---|
 | 🔊 **Lecture à voix haute** | Bouton « Écouter la fable » : API serveur `/api/tts` (OpenAI si `OPENAI_API_KEY`, sinon service gratuit sans clé, repli sur la voix du navigateur) |
 | 🎬 **Vidéo interactive** | YouTube / Vimeo / Drive / MP4 ; l'enseignant place des questions à des instants précis, la vidéo se met en pause |
-| 🧩 **Activités H5P** | Intégration par code `<iframe>` ou URL (h5p.org, h5p.com, Lumi, Moodle), redimensionnement automatique, entrée dans le suivi |
+| 🧩 **Activités H5P** | Intégration par code `<iframe>` ou URL (h5p.org, h5p.com, Lumi), redimensionnement automatique, entrée dans le suivi |
 | 🖼️ **Images par lien** | Liens directs ou de partage **Google Drive / Dropbox**, convertis automatiquement en URL affichable |
-| 🔌 **Moodle (LMS)** | Comptes, cours et inscriptions synchronisés via les **web services** (côté serveur, idempotent) ; liaison exercice ↔ quiz Moodle ; tentatives Moodle affichées dans les statistiques. Voir **[MOODLE.md](./MOODLE.md)** |
 
 - **Stack** : Next.js 16 (App Router) · React 19 · PostgreSQL + Drizzle ORM ·
   Tailwind CSS v4 · Recharts · bcrypt · sessions par cookie httpOnly.

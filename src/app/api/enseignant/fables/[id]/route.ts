@@ -5,6 +5,7 @@ import { fables } from "@/db/schema";
 import { enseignantConnecte, erreurJson, lireCorps } from "@/lib/api";
 import { exercicesDeFable } from "@/lib/queries";
 import { validerChampsFable } from "@/lib/validation";
+import { validerFablePourPublication } from "@/lib/blocs/publication";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -41,6 +42,20 @@ export async function PUT(req: Request, ctx: Ctx) {
   // Bascule rapide de publication (sans revalider tout le formulaire)
   const clefs = Object.keys(corps);
   if (clefs.length === 1 && typeof corps.publie === "boolean") {
+    // Validation des blocs avant publication (BROUILLON → PUBLIÉ).
+    // La dépublication reste toujours autorisée sans validation.
+    if (corps.publie === true) {
+      const validation = await validerFablePourPublication(id, auth.enseignant.id);
+      if (!validation.publiable) {
+        return NextResponse.json(
+          {
+            erreur: "Impossible de publier : " + validation.erreurs[0],
+            detailsValidation: validation.erreurs,
+          },
+          { status: 400 }
+        );
+      }
+    }
     const [maj] = await db
       .update(fables)
       .set({ publie: corps.publie, modifieLe: new Date() })

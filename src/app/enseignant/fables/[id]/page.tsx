@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
-import { ArrowLeft, BarChart3, ListChecks } from "lucide-react";
+import { ArrowLeft, BarChart3 } from "lucide-react";
 import { db } from "@/db";
 import { fables } from "@/db/schema";
 import { lireSession } from "@/lib/auth";
@@ -9,6 +9,8 @@ import { codesDeEnseignant, exercicesDeFable } from "@/lib/queries";
 import { FormulaireFable } from "@/components/enseignant/formulaire-fable";
 import { GestionExercices } from "@/components/enseignant/gestion-exercices";
 import { ActionsFable } from "@/components/enseignant/actions-fable";
+import { blocsEnrichisPourEnseignant } from "@/lib/blocs/queries";
+import { EditeurPedagogique } from "@/components/blocs/editeur-pedagogique";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Gérer la fable" };
@@ -29,9 +31,10 @@ export default async function PageDetailFable({
     .limit(1);
   if (!fable) notFound();
 
-  const [exercices, codes] = await Promise.all([
+  const [exercices, codes, blocs] = await Promise.all([
     exercicesDeFable(fable.id),
     codesDeEnseignant(session.enseignant.id),
+    blocsEnrichisPourEnseignant(fable.id),
   ]);
 
   return (
@@ -54,6 +57,9 @@ export default async function PageDetailFable({
               <span className="badge border-2 border-encre/10 bg-white text-encre/55">
                 {exercices.length} exercice(s)
               </span>
+              <span className="badge bg-lilas/12 text-lilas">
+                {blocs.length} bloc(s)
+              </span>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -65,41 +71,53 @@ export default async function PageDetailFable({
         </div>
       </div>
 
-      {/* Informations de la fable */}
+      {/* Éditeur pédagogique modulaire (nouveau cœur) */}
       <section>
-        <h2 className="font-titre mb-4 text-2xl font-bold">Informations de la fable</h2>
-        <FormulaireFable
-          fable={{
-            id: fable.id,
-            titre: fable.titre,
-            texte: fable.texte,
-            morale: fable.morale,
-            imageUrl: fable.imageUrl,
-            audioUrl: fable.audioUrl,
-            videoUrl: fable.videoUrl,
-            difficulte: fable.difficulte,
-            publie: fable.publie,
-            cibleCodeIds: fable.cibleCodeIds ?? [],
-          }}
-          codes={codes}
+        <h2 className="font-titre mb-4 text-2xl font-bold">Parcours pédagogique</h2>
+        <EditeurPedagogique
+          fableId={fable.id}
+          blocsInitiaux={blocs}
+          exercicesDisponibles={exercices}
+          fablePubliee={fable.publie}
         />
       </section>
 
-      {/* Exercices */}
-      <section>
-        <div className="mb-4 flex items-center gap-3">
-          <span className="grid size-10 place-items-center rounded-2xl bg-lilas/12 text-lilas">
-            <ListChecks className="size-5" />
-          </span>
-          <div>
-            <h2 className="font-titre text-2xl font-bold">Exercices associés</h2>
-            <p className="text-sm font-semibold text-encre/50">
-              Les élèves les résoudront dans l&apos;ordre affiché ici (flèches pour réordonner).
-            </p>
-          </div>
+      {/* Informations de la fable (métadonnées + ciblage) */}
+      <details className="carte overflow-hidden">
+        <summary className="cursor-pointer border-b-2 border-encre/8 bg-papier px-6 py-4 font-titre text-lg font-bold transition-colors hover:bg-papier-fonce">
+          Informations de la fable (titre, moral, difficulté, ciblage…)
+        </summary>
+        <div className="p-6">
+          <FormulaireFable
+            fable={{
+              id: fable.id,
+              titre: fable.titre,
+              texte: fable.texte,
+              morale: fable.morale,
+              imageUrl: fable.imageUrl,
+              audioUrl: fable.audioUrl,
+              videoUrl: fable.videoUrl,
+              difficulte: fable.difficulte,
+              publie: fable.publie,
+              cibleCodeIds: fable.cibleCodeIds ?? [],
+            }}
+            codes={codes}
+          />
         </div>
-        <GestionExercices fableId={fable.id} exercices={exercices} />
-      </section>
+      </details>
+
+      {/* Gestion technique des exercices (création des exercices référençables) */}
+      <details className="carte overflow-hidden">
+        <summary className="cursor-pointer border-b-2 border-encre/8 bg-papier px-6 py-4 font-titre text-lg font-bold transition-colors hover:bg-papier-fonce">
+          Créer ou modifier les exercices du moteur (8 types)
+        </summary>
+        <div className="p-6">
+          <p className="mb-4 text-sm font-semibold text-encre/50">
+            Les exercices créés ici deviennent proposables comme blocs « Exercice » dans le parcours.
+          </p>
+          <GestionExercices fableId={fable.id} exercices={exercices} />
+        </div>
+      </details>
     </div>
   );
 }

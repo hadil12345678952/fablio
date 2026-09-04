@@ -14,7 +14,6 @@ import { fablesDeEnseignant } from "@/lib/queries";
 import { statsFable } from "@/lib/statistiques";
 import { BarresTaux, BarresChoix } from "@/components/graphiques";
 import { BoutonImprimer, CorrectionsOuvertes } from "@/components/enseignant/statistiques-clients";
-import { PanneauMoodleQuiz } from "@/components/enseignant/panneau-moodle-quiz";
 import { formatDuree, formatPct } from "@/lib/format";
 import type { Metadata } from "next";
 
@@ -201,8 +200,6 @@ export default async function PageStatistiques({
                     )}
 
                     {e.enAttente && <CorrectionsOuvertes enAttente={e.enAttente} points={e.points} />}
-
-                    {e.moodleQuizId !== null && <PanneauMoodleQuiz quizId={e.moodleQuizId} />}
                   </div>
                 </section>
               ))}

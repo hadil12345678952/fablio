@@ -48,7 +48,7 @@ const typesExercices = [
   { icone: Link2, couleur: "bg-ambre/18 text-ambre-fonce", titre: "Association", texte: "Relier personnages et caractéristiques, mots et définitions." },
   { icone: PenLine, couleur: "bg-rose/12 text-rose", titre: "Question ouverte", texte: "Une réponse rédigée, corrigée automatiquement ou par l'enseignant." },
   { icone: Clapperboard, couleur: "bg-azur/12 text-azur", titre: "Vidéo interactive", texte: "La vidéo se met en pause et pose une question à l'élève." },
-  { icone: PuzzleIcon, couleur: "bg-menthe/12 text-menthe-fonce", titre: "Activité H5P", texte: "Intégrez vos activités H5P (h5p.org, Lumi, Moodle) dans la fable." },
+  { icone: PuzzleIcon, couleur: "bg-menthe/12 text-menthe-fonce", titre: "Activité H5P", texte: "Intégrez vos activités H5P (h5p.org, Lumi) dans la fable." },
 ];
 
 const etapes = [
@@ -309,7 +309,7 @@ export default async function PageAccueil() {
               icone: PuzzleIcon,
               fond: "from-menthe to-menthe-fonce",
               titre: "Activités H5P",
-              texte: "Réutilisez vos activités H5P existantes (h5p.org, Lumi, Moodle) : collez le code d'intégration, l'activité s'affiche dans la fable et entre dans le suivi.",
+              texte: "Réutilisez vos activités H5P existantes (h5p.org, Lumi) : collez le code d'intégration, l'activité s'affiche dans la fable et entre dans le suivi.",
             },
           ].map((bloc, i) => (
             <article key={bloc.titre} className={`anim-apparition rounded-3xl bg-gradient-to-br ${bloc.fond} p-7 text-white shadow-carte`} style={{ animationDelay: `${i * 0.1}s` }}>

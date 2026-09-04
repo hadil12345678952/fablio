@@ -115,8 +115,6 @@ export const exercices = pgTable(
     ordre: integer("ordre").notNull().default(0),
     publie: boolean("publie").notNull().default(true),
     maxTentatives: integer("max_tentatives"), // null = illimité
-    // Lien facultatif vers un quiz Moodle créé dans Moodle (source de vérité).
-    moodleQuizId: integer("moodle_quiz_id"),
     creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("idx_exercices_fable").on(t.fableId)]
@@ -155,57 +153,37 @@ export const tentatives = pgTable(
 );
 
 // ---------------------------------------------------------------------------
-// Intégration Moodle — liaisons uniquement, AUCUNE donnée pédagogique dupliquée
-// (Moodle reste la source de vérité : cours, comptes, tentatives, notes).
-// Ces tables sont additives : l'application fonctionne sans elles.
+// Blocs pédagogiques — contenu librement ordonné d'une fable (Phases 1+).
+// Aucune colonne existante n'est modifiée : cette table est additive.
 // ---------------------------------------------------------------------------
-
-// Correspondance comptes plateforme ↔ comptes Moodle (un seul compte Moodle
-// par utilisateur plateforme : synchronisation idempotente garantie ici).
-export const liensMoodleUtilisateurs = pgTable(
-  "liens_moodle_utilisateurs",
+export const blocsFable = pgTable(
+  "blocs_fable",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    typeUtilisateur: text("type_utilisateur").notNull(), // enseignant | eleve
-    utilisateurId: uuid("utilisateur_id").notNull(), // id plateforme
-    moodleUserId: integer("moodle_user_id").notNull(),
-    identifiantMoodle: text("identifiant_moodle").notNull().default(""),
-    creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [
-    uniqueIndex("uq_liens_moodle_u_plateforme").on(t.typeUtilisateur, t.utilisateurId),
-    uniqueIndex("uq_liens_moodle_u_moodle").on(t.moodleUserId),
-  ]
-);
-
-// Classe plateforme (code de parrainage) ↔ cours Moodle
-export const liensMoodleCours = pgTable(
-  "liens_moodle_cours",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    codeId: uuid("code_id")
+    fableId: uuid("fable_id")
       .notNull()
-      .references(() => codesParrainage.id, { onDelete: "cascade" }),
-    moodleCourseId: integer("moodle_course_id").notNull(),
-    titreCours: text("titre_cours").notNull().default(""),
-    identifiantCours: text("identifiant_cours").notNull().default(""),
+      .references(() => fables.id, { onDelete: "cascade" }),
+    // texte | image | audio | video | exercice  (extensible : document, pdf,
+    // citation, encadre, tableau, galerie, question, activite, h5p…)
+    type: text("type").notNull(),
+    ordre: integer("ordre").notNull().default(0), // 0-based, contigu (transactions)
+    titre: text("titre").notNull().default(""),
+    contenu: jsonb("contenu").$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+    // Référence DÉDIÉE du bloc exercice : pas un UUID enfoui dans le JSON.
+    exerciceId: uuid("exercice_id").references(() => exercices.id, {
+      onDelete: "cascade",
+    }),
+    visible: boolean("visible").notNull().default(true),
     creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
+    modifieLe: timestamp("modifie_le", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (t) => [
-    uniqueIndex("uq_liens_moodle_c_code").on(t.codeId),
-    uniqueIndex("uq_liens_moodle_c_moodle").on(t.moodleCourseId),
+    index("idx_blocs_fable_ordre").on(t.fableId, t.ordre),
+    index("idx_blocs_exercice").on(t.exerciceId),
   ]
 );
-
-// Journal des opérations de synchronisation (200 dernières retenues).
-export const journalMoodle = pgTable("journal_moodle", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  operation: text("operation").notNull(), // tester | utilisateurs | cours | quiz
-  statut: text("statut").notNull(), // ok | erreur | info
-  message: text("message").notNull(),
-  details: text("details").notNull().default(""),
-  creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
-});
 
 // ---------------------------------------------------------------------------
 // Sessions (cookie httpOnly)
@@ -229,3 +207,4 @@ export type CodeRow = typeof codesParrainage.$inferSelect;
 export type FableRow = typeof fables.$inferSelect;
 export type ExerciceRow = typeof exercices.$inferSelect;
 export type TentativeRow = typeof tentatives.$inferSelect;
+export type BlocFableRow = typeof blocsFable.$inferSelect;
