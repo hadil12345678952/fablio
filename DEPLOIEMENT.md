@@ -181,7 +181,7 @@ enregistrements DNS indiqués (`CNAME vers cname.vercel-dns.com`). HTTPS automat
 | Pages blanches après modif du schéma | code déployé avant le schéma | repoussez le schéma, puis **Redeploy** |
 | L'image d'une fable ne s'affiche pas | fichier Drive non partagé | Drive → **Partager → Tous les utilisateurs disposant du lien**. Fablio convertit ensuite le lien automatiquement |
 | Bouton « Écouter » muet | service TTS bloqué par le réseau de l'école | l'application bascule seule sur la voix du navigateur ; sinon renseignez `OPENAI_API_KEY` |
-| Activité H5P vide | le site hôte interdit l'intégration (`X-Frame-Options`) | utilisez h5p.org / h5p.com / Lumi, ou autorisez `frame-ancestors *` sur votre Moodle/WordPress |
+| Activité H5P vide | le site hôte interdit l'intégration (`X-Frame-Options`) | utilisez h5p.org / h5p.com / Lumi, ou autorisez `frame-ancestors *` sur votre hébergeur |
 | Vidéo YouTube sans pause automatique | lien Drive ou Vimeo | seuls YouTube et les fichiers `.mp4` permettent la pause pilotée |
 
 ---
