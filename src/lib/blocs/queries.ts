@@ -24,14 +24,67 @@ export function versBlocVue(b: BlocFableRow): BlocVue {
   };
 }
 
-/** Blocs d'une fable, dans l'ordre. */
+// ---------------------------------------------------------------------------
+// Résilience déploiement : si la base de production n'a pas encore la table
+// `blocs_fable` (migration non exécutée après le push Vercel), l'application
+// ne doit PAS planter en 500 : on retourne une valeur sûre et on bascule sur
+// l'affichage historique. Détecté une seule fois puis journalisé.
+// ---------------------------------------------------------------------------
+
+let avertissementSchema = false;
+
+/**
+ * Détecte l'erreur « table blocs_fable absente » en **inspecant la chaîne des
+ * causes** : Drizzle ORM emballe l'erreur PostgreSQL
+ * (DrizzleQueryError / « Failed query ») et l'erreur native (code SQLSTATE
+ * `42P01`, « relation does not exist ») est portée par `error.cause`.
+ */
+export function blocsNonDisponibles(erreur: unknown): boolean {
+  let courant: unknown = erreur;
+  for (let i = 0; i < 4 && courant !== null && courant !== undefined; i++) {
+    const e = courant as { code?: unknown; message?: unknown; cause?: unknown };
+    const code = typeof e.code === "string" ? e.code : "";
+    const message = typeof e.message === "string" ? e.message : String(e);
+    if (
+      (code === "42P01" && message.includes("blocs_fable")) ||
+      (message.includes("blocs_fable") &&
+        (message.includes("does not exist") ||
+          message.includes("n'existe pas") ||
+          message.includes("undefined table")))
+    ) {
+      return true;
+    }
+    courant = e.cause;
+  }
+  return false;
+}
+
+function journaliserSchemaManquant(e: unknown): void {
+  if (avertissementSchema) return;
+  avertissementSchema = true;
+  console.warn(
+    "[fablio] ⚠ La table blocs_fable n'existe pas dans la base : exécuter " +
+      "« node scripts/setup-db.mjs » sur cette base (déploiement)",
+    e instanceof Error ? `— ${e.message.slice(0, 220)}` : ""
+  );
+}
+
+/** Blocs d'une fable, dans l'ordre — [] si la table n'existe pas (fallback historique). */
 export async function blocsDeFable(fableId: string): Promise<BlocVue[]> {
-  const lignes = await db
-    .select()
-    .from(blocsFable)
-    .where(eq(blocsFable.fableId, fableId))
-    .orderBy(asc(blocsFable.ordre));
-  return lignes.map(versBlocVue);
+  try {
+    const lignes = await db
+      .select()
+      .from(blocsFable)
+      .where(eq(blocsFable.fableId, fableId))
+      .orderBy(asc(blocsFable.ordre));
+    return lignes.map(versBlocVue);
+  } catch (e) {
+    if (blocsNonDisponibles(e)) {
+      journaliserSchemaManquant(e);
+      return [];
+    }
+    throw e;
+  }
 }
 
 /**
@@ -67,6 +120,7 @@ export async function blocsEnrichisPourEleve(
   eleveId: string
 ): Promise<BlocEnrichi[]> {
   const blocs = await blocsDeFable(fableId);
+  if (blocs.length === 0) return blocs; // table absente ou parcours vide
   const exoIds = blocs
     .map((b) => b.exerciceId)
     .filter((x): x is string => x !== null);
@@ -141,11 +195,19 @@ export async function blocsEnrichisPourEnseignant(
 
 /** Nombre de blocs d'une fable (pour détecter le basculement vers le nouveau rendu). */
 export async function nombreBlocs(fableId: string): Promise<number> {
-  const lignes = await db
-    .select({ id: blocsFable.id })
-    .from(blocsFable)
-    .where(eq(blocsFable.fableId, fableId));
-  return lignes.length;
+  try {
+    const lignes = await db
+      .select({ id: blocsFable.id })
+      .from(blocsFable)
+      .where(eq(blocsFable.fableId, fableId));
+    return lignes.length;
+  } catch (e) {
+    if (blocsNonDisponibles(e)) {
+      journaliserSchemaManquant(e);
+      return 0; // conduit au rendu historique (fallback existant)
+    }
+    throw e;
+  }
 }
 
 /** Fable si publiée et accessible à l'élève (contrôle d'accès existant conservé). */

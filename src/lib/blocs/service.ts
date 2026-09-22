@@ -6,6 +6,11 @@ import { sql } from "drizzle-orm";
 import { validerContenuBloc } from "./validation";
 import { contenuParDefaut } from "./registre";
 import type { TypeBloc, ContenuBloc } from "./types";
+import { blocsNonDisponibles } from "./queries";
+
+const ERREUR_SCHEMA =
+  "La base n'est pas encore migrée : exécutez « node scripts/setup-db.mjs » " +
+  "avec la variable DATABASE_URL de production (voir DEPLOIEMENT.md).";
 
 // ---------------------------------------------------------------------------
 // Service métier des blocs : toutes les opérations garantissent l'invariant
@@ -81,21 +86,36 @@ export async function creerBloc(
   const fable = await fablePossedee(fableId, enseignantId);
   if (!fable) return { erreur: "Fable introuvable." };
 
+  try {
+    return await creerBlocInterne(fableId, params);
+  } catch (e) {
+    if (blocsNonDisponibles(e)) return { erreur: ERREUR_SCHEMA };
+    throw e;
+  }
+}
+
+async function creerBlocInterne(
+  fableId: string,
+  params: Parameters<typeof creerBloc>[2]
+): Promise<{ bloc?: BlocFableRow; erreur?: string }> {
+
   const type = params.type;
   const contenu = params.contenu ?? contenuParDefaut(type);
-  const erreur = validerContenuBloc(type, contenu);
+  // Brouillon tolérant : l'enseignant peut créer un bloc vide puis le compléter.
+  const erreur = validerContenuBloc(type, contenu, { strict: false });
   if (erreur) return { erreur };
 
-  // Bloc exercice : on exige une référence valide appartenant à cette fable.
+  // Bloc exercice : la référence peut être choisie maintenant OU plus tard en
+  // éditant le bloc (brouillon sans exercice autorisé à la création).
   let exerciceId: string | null = null;
-  if (type === "exercice") {
-    if (!params.exerciceId) return { erreur: "Sélectionnez un exercice pour ce bloc." };
+  if (type === "exercice" && params.exerciceId) {
     const [exo] = await db
       .select()
       .from(exercices)
       .where(and(eq(exercices.id, params.exerciceId), eq(exercices.fableId, fableId)))
       .limit(1);
-    if (!exo) return { erreur: "Exercice introuvable ou n'appartenant pas à cette fable." };
+    if (!exo)
+      return { erreur: "Exercice introuvable ou n'appartenant pas à cette fable." };
     exerciceId = exo.id;
   }
 
@@ -169,6 +189,8 @@ export async function modifierBloc(
     titre?: string;
     contenu?: ContenuBloc;
     visible?: boolean;
+    /** Sélection / changement de l'exercice référencé (colonne dédiée). */
+    exerciceId?: string;
   }
 ): Promise<{ bloc?: BlocFableRow; erreur?: string }> {
   const poss = await blocPossede(blocId, enseignantId);
@@ -176,8 +198,27 @@ export async function modifierBloc(
   const type = poss.bloc.type as TypeBloc;
 
   const contenu = params.contenu ?? poss.bloc.contenu;
-  const erreur = validerContenuBloc(type, contenu);
+  const erreur = validerContenuBloc(type, contenu, { strict: false });
   if (erreur) return { erreur };
+
+  // Changement de la référence exercice : la colonne dédiée est écrite ICI
+  // (et jamais enfouie dans le contenu JSON — bug de la version précédente).
+  let exerciceId: string | null | undefined = undefined;
+  if (type === "exercice" && params.exerciceId !== undefined) {
+    const [exo] = await db
+      .select()
+      .from(exercices)
+      .where(
+        and(
+          eq(exercices.id, params.exerciceId),
+          eq(exercices.fableId, poss.bloc.fableId)
+        )
+      )
+      .limit(1);
+    if (!exo)
+      return { erreur: "Exercice introuvable ou n'appartenant pas à cette fable." };
+    exerciceId = exo.id;
+  }
 
   const [bloc] = await db
     .update(blocsFable)
@@ -185,6 +226,8 @@ export async function modifierBloc(
       ...(params.titre !== undefined ? { titre: params.titre.slice(0, 200) } : {}),
       contenu: contenu as Record<string, unknown>,
       ...(params.visible !== undefined ? { visible: params.visible } : {}),
+      ...(exerciceId !== undefined ? { exerciceId } : {}),
+      modifieLe: new Date(),
     })
     .where(eq(blocsFable.id, blocId))
     .returning();

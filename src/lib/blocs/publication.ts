@@ -52,7 +52,8 @@ export async function validerFablePourPublication(
     const type = b.type as TypeBloc;
     const nom = `Bloc ${i + 1} (${type})`;
 
-    const erreurC = validerContenuBloc(type, b.contenu ?? {});
+    // Publication = validation STRICTE : chaque bloc visible doit être complet.
+    const erreurC = validerContenuBloc(type, b.contenu ?? {}, { strict: true });
     if (erreurC) erreurs.push(`${nom} : ${erreurC}`);
 
     if (type === "exercice") {

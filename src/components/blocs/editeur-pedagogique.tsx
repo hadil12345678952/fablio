@@ -139,14 +139,55 @@ export function EditeurPedagogique({
     if (!modale) return;
     const pos = modale.position;
     setModale(null);
+    setEnCours(true);
     const contenu = contenuParDefaut(type);
-    await action(
-      fetch(`/api/enseignant/fables/${fableId}/blocs`, {
+    try {
+      const res = await fetch(`/api/enseignant/fables/${fableId}/blocs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type, contenu, position: pos >= 0 ? pos : null }),
-      })
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(json.erreur ?? "Impossible d'ajouter ce contenu.");
+        return;
+      }
+      await rafraicher();
+      // Ouvre directement le bloc fraîchement créé en mode édition : pour un
+      // bloc « Exercice », le sélecteur d'exercice est immédiatement visible.
+      if (json.bloc?.id) setEdition(json.bloc.id);
+    } finally {
+      setEnCours(false);
+    }
+  }
+
+  /** Sélection / changement de l'exercice — persiste la COLONNE dédiée. */
+  async function changerExercice(blocId: string, exerciceId: string) {
+    if (!exerciceId) return; // option vide « Choisir… » ignorée
+    // Mise à jour optimiste immédiate, puis persistance.
+    setBlocs((liste) =>
+      liste.map((b) => (b.id === blocId ? { ...b, exerciceId } : b))
     );
+    setSauvegarde("envoi");
+    try {
+      const res = await fetch(`/api/enseignant/blocs/${blocId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ exerciceId }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSauvegarde("erreur");
+        console.warn("[éditeur-blocs exercice]", json.erreur ?? `Erreur ${res.status}`);
+        return;
+      }
+      setSauvegarde("ok");
+      setTimeout(() => setSauvegarde("repos"), 1500);
+      await rafraicher();
+    } catch (err) {
+      setSauvegarde("erreur");
+      console.error("[éditeur-blocs exercice]", err);
+    }
   }
 
   async function changerContenu(id: string, type: TypeBloc, contenu: ContenuBloc) {
@@ -286,7 +327,7 @@ export function EditeurPedagogique({
                 onMasquer={() => basculerVisible(b.id)}
                 onSupprimer={() => setSuppression(b.id)}
                 onChangerContenu={(contenu) => changerContenu(b.id, b.type, contenu)}
-                onChoisirExercice={(id) => changerContenu(b.id, b.type, { exerciceId: id } as ContenuBloc)}
+                onChoisirExercice={(id) => changerExercice(b.id, id)}
               />
               <BoutonAjouter position={index + 1} onOuvrir={ouvrirModale} />
             </div>

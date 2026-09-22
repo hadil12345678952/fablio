@@ -59,7 +59,7 @@ postgresql://neondb_owner:<MOT-DE-PASSE>@ep-xxxx-pooler.<region>.aws.neon.tech/n
 - Si `&channel_binding=require` provoque une erreur de connexion avec certaines
   versions de `pg`, vous pouvez le retirer (voir Dépannage §8).
 
-### 2.2 Appliquer le schéma (création des 7 tables)
+### 2.2 Appliquer le schéma — **méthode garantie (provisionnement complet)**
 
 Depuis votre poste de développement, **à la racine du projet**, avec votre
 chaîne Neon (entre guillemets) :
@@ -67,28 +67,45 @@ chaîne Neon (entre guillemets) :
 ```bash
 # macOS / Linux
 DATABASE_URL="postgresql://neondb_owner:<MDP>@ep-xxxx-pooler.<region>.aws.neon.tech/neondb?sslmode=require" \
-  npx drizzle-kit push
+  node scripts/setup-db.mjs
 
 # Windows PowerShell
-$env:DATABASE_URL="postgresql://neondb_owner:npg_6hqcV0WtNjZA@ep-lucky-fog-b2f08xdn-pooler.c-6.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
-npx drizzle-kit push
+$env:DATABASE_URL="postgresql://neondb_owner:<MDP>@ep-xxxx-pooler.<region>.aws.neon.tech/neondb?sslmode=require"
+node scripts/setup-db.mjs
 ```
 
-Réponse attendue : `[✓] Changes applied` (7 tables : `enseignants`,
-`codes_parrainage`, `eleves`, `fables`, `exercices`, `tentatives`, `sessions`).
+`scripts/setup-db.mjs` crée **toutes** les tables attendues par le code
+(`enseignants`, `codes_parrainage`, `eleves`, `fables`, `exercices`,
+`tentatives`, `sessions`, **`blocs_fable`**) plus les index, dans **une seule
+commande idempotente** (relançable sans risque). Sécurité supplémentaire :
+même sans cela, les pages de l'application **ne plantent plus** (fallback
+historique automatique) — mais la création de blocs nécessite le schéma.
 
-> Vérification optionnelle :
-> `DATABASE_URL="…" node -e "const{Client}=require('pg');const c=new Client({connectionString:process.env.DATABASE_URL,ssl:{rejectUnauthorized:false}});c.connect().then(()=>c.query('select count(*) from enseignants')).then(r=>{console.log(r.rows);return c.end()})"`
+> Si une ancienne base contient les tables Moodle : exportez-les d'abord
+> (cf. `MOODLE_REMOVAL.md`), puis
+> `DATABASE_URL="…" node scripts/setup-db.mjs --supprimer-moodle`.
 
-### 2.3 (Optionnel) Charger les données de démonstration
+Alternative Drizzle (équivalente) : `DATABASE_URL="…" npx drizzle-kit push`.
+
+### 2.3 (Recommandé si l'app contenait déjà des fables) Migrer le parcours
+
+```bash
+DATABASE_URL="postgresql://…neon.tech/neondb?sslmode=require" \
+  node scripts/migrer-blocs.mjs --execute
+```
+
+Convertit l'ancien contenu (texte → bloc TEXTE, image → bloc IMAGE,
+exercices → blocs EXERCICE) — idempotent, `--verify` pour contrôler,
+`--rollback` pour annuler.
+
+### 2.4 (Optionnel) Données de démonstration
 
 ```bash
 DATABASE_URL="postgresql://…neon.tech/neondb?sslmode=require" node scripts/seed.mjs
 ```
 
-Crée : enseignant `demo.enseignant@fablio.tn` / `demo1234`, codes `CE2A-DEMO1` /
-`CE2B-DEMO2`, élèves `lina`, `samy`, `nour` (code secret `1234`), 3 fables
-publiées et leurs exercices. Idempotent : peut être relancé sans doublons.
+Crée : enseignant `demo.enseignant@fablio.tn` / `demo1234`, classes
+`CE2A-DEMO1` / `CE2B-DEMO2`, élèves `lina`/`samy`/`nour` (PIN `1234`).
 
 ---
 
@@ -176,7 +193,7 @@ enregistrements DNS indiqués (`CNAME vers cname.vercel-dns.com`). HTTPS automat
 | `SASL / channel binding requires SSL` ou erreur proche | paramètre `&channel_binding=require` mal supporté | retirez-le de la chaîne : gardez seulement `?sslmode=require` |
 | `Too many connections` | pool direct sans pooler | utilisez l'URL **« Pooled connection »** (hôte contenant `-pooler`) |
 | Première requête lente (3–5 s) | Neon *scale-to-zero* (offre gratuite endort la base) | normal ; désactiver l'autosuspend dans Neon **Settings → Compute**, ou planifier un ping quotidien sur `/api/health` |
-| `relation "fables" does not exist` | schéma non poussé | `DATABASE_URL="…" npx drizzle-kit push` (§2.2) |
+| `relation "…" does not exist` ou pages 500 après déploiement | schéma non provisionné | `DATABASE_URL="…" node scripts/setup-db.mjs` puis, si fables existantes, `node scripts/migrer-blocs.mjs --execute` (§2.2–2.3). **Inofensif entre-temps : l'app bascule en affichage historique** |
 | Build Vercel échoue sur `@/db` « DATABASE_URL is required » | variable manquante au build | l'app ne devrait pas en avoir besoin au build (pages dynamiques) ; si besoin, mettez la variable aussi pour l'environnement **Build** |
 | Pages blanches après modif du schéma | code déployé avant le schéma | repoussez le schéma, puis **Redeploy** |
 | L'image d'une fable ne s'affiche pas | fichier Drive non partagé | Drive → **Partager → Tous les utilisateurs disposant du lien**. Fablio convertit ensuite le lien automatiquement |

@@ -27,6 +27,8 @@ export async function PUT(req: Request, ctx: Ctx) {
     titre: typeof corps.titre === "string" ? corps.titre : undefined,
     contenu: corps.contenu !== undefined ? (corps.contenu as ContenuBloc) : undefined,
     visible: typeof corps.visible === "boolean" ? corps.visible : undefined,
+    exerciceId:
+      typeof corps.exerciceId === "string" ? corps.exerciceId : undefined,
   });
   if (resultat.erreur) return erreurJson(resultat.erreur, 400);
   return NextResponse.json({ ok: true, bloc: resultat.bloc });
