@@ -70,7 +70,7 @@ DATABASE_URL="postgresql://neondb_owner:<MDP>@ep-xxxx-pooler.<region>.aws.neon.t
   npx drizzle-kit push
 
 # Windows PowerShell
-$env:DATABASE_URL="postgresql://neondb_owner:<MDP>@ep-xxxx-pooler.<region>.aws.neon.tech/neondb?sslmode=require"
+$env:DATABASE_URL="postgresql://neondb_owner:npg_6hqcV0WtNjZA@ep-lucky-fog-b2f08xdn-pooler.c-6.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 npx drizzle-kit push
 ```
 
