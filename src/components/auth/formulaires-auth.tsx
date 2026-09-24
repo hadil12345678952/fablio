@@ -206,11 +206,19 @@ export function FormulaireConnexion({ roleInitial }: { roleInitial: Role }) {
           )}
         </button>
       </form>
-      <p className="mt-6 text-center text-sm font-bold text-encre-doux">
+      <p className="mt-5 text-center">
+        <Link
+          href={`/mot-de-passe/oublie?role=${role}`}
+          className="text-sm font-bold text-encre-doux underline decoration-2 underline-offset-4 hover:text-rose"
+        >
+          {role === "enseignant" ? "Mot de passe oublié ?" : "J'ai oublié mon code secret"}
+        </Link>
+      </p>
+      <p className="mt-3 text-center text-sm font-bold text-encre-doux">
         Pas encore de compte ?{" "}
         <Link
           href={role === "enseignant" ? "/inscription?role=enseignant" : "/inscription?role=eleve"}
-          className="text-corail underline decoration-2 underline-offset-4 hover:text-corail-fonce"
+          className="text-rose underline decoration-2 underline-offset-4 hover:text-rose-fonce"
         >
           S&apos;inscrire
         </Link>

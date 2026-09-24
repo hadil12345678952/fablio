@@ -12,7 +12,7 @@ export default async function LayoutEleve({ children }: { children: ReactNode })
   if (!session || session.type !== "eleve") redirect("/connexion?role=eleve");
 
   return (
-    <div className="min-h-dvh">
+    <div className="espace-enfant min-h-dvh">
       <header className="sticky top-0 z-40 border-b-3 border-encre/8 bg-papier/90 backdrop-blur-md">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-5 py-3">
           <Link href="/eleve" className="flex items-center gap-2.5">

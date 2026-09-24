@@ -14,11 +14,15 @@
   --color-azur: #3d9ae8;
   --color-azur-fonce: #2778c0;
 
-  /* --- Couleurs de soutien (espace enseignant, accents) --- */
-  --color-corail: #e4572e;
-  --color-corail-fonce: #c2431d;
-  --color-sarcelle: #2f7d6b;
-  --color-sarcelle-fonce: #22614f;
+  /* --- Couleurs de soutien (espace enseignant, accents) ---
+     Alignées sur le trio principal pour une identité cohérente :
+     « corail » et « sarcelle » (héritage) pointent désormais vers des teintes
+     harmonisées, ce qui met à jour d'un coup toutes les pages qui les utilisent
+     sans avoir à modifier chaque composant. */
+  --color-corail: #ef5a86; /* rose chaud, s'accorde au rose principal */
+  --color-corail-fonce: #cf3f6c;
+  --color-sarcelle: #1f9e73; /* vert, s'accorde à la menthe */
+  --color-sarcelle-fonce: #16795a;
   --color-ambre: #f2a93b;
   --color-ambre-fonce: #cf860f;
   --color-lilas: #7c6bd6;
@@ -206,6 +210,33 @@ body {
 }
 .anim-pulser {
   animation: pulser 2s ease-in-out infinite;
+}
+
+/* --- Accessibilité & confort enfant ---------------------------------------
+   Zones tactiles d'au moins 44 px dans les espaces enfants, focus toujours
+   visible au clavier, et respect de « réduire les animations ». */
+.espace-enfant button,
+.espace-enfant a[class*="btn"],
+.espace-enfant select,
+.espace-enfant input[type="checkbox"] {
+  min-height: 44px;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-azur);
+  outline-offset: 2px;
+  border-radius: 0.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Barre de défilement discrète */

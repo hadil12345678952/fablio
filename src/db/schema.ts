@@ -186,6 +186,30 @@ export const blocsFable = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Réinitialisation de mot de passe ENSEIGNANT (jeton à usage unique).
+// Le jeton n'est JAMAIS stocké en clair : seul son hachage SHA-256 est gardé.
+// Les élèves n'ont pas d'email : leur code secret est réinitialisé par leur
+// enseignant (fonction déjà existante) — voir RECUPERATION.md.
+// ---------------------------------------------------------------------------
+export const jetonsReinitialisation = pgTable(
+  "jetons_reinitialisation",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    enseignantId: uuid("enseignant_id")
+      .notNull()
+      .references(() => enseignants.id, { onDelete: "cascade" }),
+    jetonHash: text("jeton_hash").notNull(),
+    expireLe: timestamp("expire_le", { withTimezone: true }).notNull(),
+    utiliseLe: timestamp("utilise_le", { withTimezone: true }),
+    creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uq_jeton_hash").on(t.jetonHash),
+    index("idx_jeton_enseignant").on(t.enseignantId),
+  ]
+);
+
+// ---------------------------------------------------------------------------
 // Sessions (cookie httpOnly)
 // ---------------------------------------------------------------------------
 export const sessions = pgTable("sessions", {

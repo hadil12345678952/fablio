@@ -2,7 +2,7 @@
 // Provisionne COMPLÈTEMENT la base Fablio (idempotent — peut être relancé).
 //
 //   node scripts/setup-db.mjs
-//   DATABASE_URL="postgresql://neondb_owner:npg_6hqcV0WtNjZA@ep-lucky-fog-b2f08xdn-pooler.c-6.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require" node scripts/setup-db.mjs
+//   DATABASE_URL="postgresql://…neon.tech/…?sslmode=require" node scripts/setup-db.mjs
 //
 // - Crée TOUTES les tables attendues par le code (visions cible : fables,
 //   exercices, tentatives, … + blocs_fable) avec leurs contraintes et index.
@@ -117,7 +117,19 @@ CREATE TABLE IF NOT EXISTS blocs_fable (
   modifie_le timestamptz NOT NULL DEFAULT now()
 );
 
+-- ---------- Récupération de mot de passe enseignant ------------------------
+CREATE TABLE IF NOT EXISTS jetons_reinitialisation (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  enseignant_id uuid NOT NULL REFERENCES enseignants(id) ON DELETE CASCADE,
+  jeton_hash text NOT NULL,
+  expire_le timestamptz NOT NULL,
+  utilise_le timestamptz,
+  cree_le timestamptz NOT NULL DEFAULT now()
+);
+
 -- ---------- Index ------------------------------------------------------------
+CREATE UNIQUE INDEX IF NOT EXISTS uq_jeton_hash ON jetons_reinitialisation(jeton_hash);
+CREATE INDEX IF NOT EXISTS idx_jeton_enseignant ON jetons_reinitialisation(enseignant_id);
 CREATE INDEX IF NOT EXISTS idx_codes_enseignant ON codes_parrainage(enseignant_id);
 CREATE INDEX IF NOT EXISTS idx_eleves_enseignant ON eleves(enseignant_id);
 CREATE INDEX IF NOT EXISTS idx_fables_enseignant ON fables(enseignant_id);
