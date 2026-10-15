@@ -87,6 +87,24 @@ historique automatique) — mais la création de blocs nécessite le schéma.
 
 Alternative Drizzle (équivalente) : `DATABASE_URL="…" npx drizzle-kit push`.
 
+> 🔴 **À FAIRE UNE FOIS avant le premier déploiement du correctif sur une base
+> EXISTANTE** (celle qui tourne aujourd'hui en production) : le nom des contraintes
+> `UNIQUE` a changé pour correspondre à Drizzle. Tant que la base n'est pas alignée,
+> `npx drizzle-kit push` (que le build Vercel enchaîne) cherche à ajouter une seconde
+> contrainte identique et **pose une question** → sans terminal, il **fait échouer le
+> build**. La mise à niveau est idempotente et sans effet sur les données :
+>
+> ```bash
+> DATABASE_URL="postgresql://…neon.tech/neondb?sslmode=require" node scripts/setup-db.mjs
+> ```
+>
+> (Cette commande renomme `enseignants_email_key` → `enseignants_email_unique`,
+> `codes_parrainage_code_key` → `codes_parrainage_code_unique`, crée les index manquants
+> de `sessions` et ne touche à aucune donnée.)
+> Vérification après coup : `DATABASE_URL="…" npx drizzle-kit push` doit répondre
+> `[i] No changes detected`. Si la base a été créée par `drizzle-kit push`, elle est
+> déjà alignée : rien à faire.
+>
 > ✅ **Cohérence `setup-db.mjs` ↔ Drizzle** : les noms de contraintes ont été alignés
 > (`enseignants_email_unique`, `codes_parrainage_code_unique`) et les index de `sessions`
 > ajoutés au schéma. Vérifié en non interactif : `npx drizzle-kit push` ne propose plus
