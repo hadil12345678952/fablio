@@ -880,6 +880,103 @@ section("18. Nettoyage des artefacts de test");
   verifier("fable de test bien absente (404)", apres.statut === 404, `reçu ${apres.statut}`);
 }
 
+
+section("19. Anti-force-brute de la connexion (audit 2026-10)");
+{
+  // Compte enseignant jetable : le bornage est volontairement par identifiant,
+  // donc aucun autre compte n'est gêné par ces tentatives.
+  const emailBrute = `brute.${SUFFIXE}@fablio.test`;
+  const mdpBrute = "motdepasse-solide-1";
+  const inscription = await requete("POST", "/api/auth/enseignant/inscription", {
+    corps: { nom: "Prof Test Brute", email: emailBrute, motDePasse: mdpBrute },
+  });
+  verifier(
+    "compte jetable créé pour le test de bornage",
+    inscription.statut === 200,
+    `reçu ${inscription.statut}`
+  );
+
+  let recus401 = 0;
+  for (let i = 0; i < 5; i++) {
+    const r = await requete("POST", "/api/auth/enseignant/connexion", {
+      corps: { email: emailBrute, motDePasse: `faute-${i}` },
+    });
+    if (r.statut === 401) recus401++;
+  }
+  verifier(
+    "5 échecs consécutifs → 5 × 401 (le seuil déclenche le blocage APRÈS le 5e)",
+    recus401 === 5,
+    `reçus 401 : ${recus401}/5`
+  );
+
+  const apresSeuil = await requete("POST", "/api/auth/enseignant/connexion", {
+    corps: { email: emailBrute, motDePasse: mdpBrute },
+  });
+  verifier(
+    "le mot de passe CORRECT est refusé pendant le blocage → 429",
+    apresSeuil.statut === 429,
+    `reçu ${apresSeuil.statut}`
+  );
+  const retryAfter = Number(apresSeuil.entetes.get("retry-after"));
+  verifier(
+    "en-tête Retry-After présent et cohérent (≤ 10 min)",
+    Number.isFinite(retryAfter) && retryAfter > 0 && retryAfter <= 600,
+    `Retry-After=${apresSeuil.entetes.get("retry-after")}`
+  );
+  verifier(
+    "message utilisateur explicite et en français",
+    /tentatives|attends/i.test(apresSeuil.json?.erreur ?? ""),
+    apresSeuil.json?.erreur ?? ""
+  );
+
+  const autreCompte = await seConnecterEnseignant("demo.enseignant@fablio.tn", "demo1234");
+  verifier(
+    "un AUTRE compte peut toujours se connecter (bornage par identifiant)",
+    autreCompte !== null
+  );
+
+  // Élève : le PIN court (4-12 caractères) est le vrai risque de devinette.
+  const pseudoBrute = `pb${SUFFIXE}`;
+  const inscuEleve = await requete("POST", "/api/auth/eleve/inscription", {
+    corps: { pseudo: pseudoBrute, code: "CE2A-DEMO1", pin: "123456" },
+  });
+  verifier("élève jetable créé pour le test de bornage", inscuEleve.statut === 200, `reçu ${inscuEleve.statut}`);
+
+  let pinsRefuses = 0;
+  for (let i = 0; i < 5; i++) {
+    const r = await requete("POST", "/api/auth/eleve/connexion", {
+      corps: { pseudo: pseudoBrute, code: "CE2A-DEMO1", pin: `000${i}` },
+    });
+    if (r.statut === 401) pinsRefuses++;
+  }
+  verifier("5 PIN erronés → 5 × 401", pinsRefuses === 5, `reçus 401 : ${pinsRefuses}/5`);
+
+  const eleveBloque = await requete("POST", "/api/auth/eleve/connexion", {
+    corps: { pseudo: pseudoBrute, code: "CE2A-DEMO1", pin: "123456" },
+  });
+  verifier(
+    "PIN correct refusé pendant le blocage de l'élève → 429",
+    eleveBloque.statut === 429,
+    `reçu ${eleveBloque.statut}`
+  );
+
+  const camarade = await requete("POST", "/api/auth/eleve/connexion", {
+    corps: { pseudo: "lina", code: "CE2A-DEMO1", pin: "1234" },
+  });
+  verifier(
+    "un camarade de la MÊME classe n'est pas bloqué",
+    camarade.statut === 200,
+    `reçu ${camarade.statut}`
+  );
+
+  const sante = await requete("GET", "/api/health");
+  verifier(
+    "/api/health expose l'état du bornage (diagnostic d'exploitation)",
+    sante.json?.bornage === "actif" && Array.isArray(sante.json?.schemaManquant),
+    JSON.stringify(sante.json)
+  );
+}
+
 // ---------------------------------------------------------------------------
 
 console.log("\n" + "─".repeat(72));
