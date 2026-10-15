@@ -250,15 +250,15 @@ export function EditeurPedagogique({
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="badge bg-ciel/12 text-ciel">
-            <Eye className="size-3.5" /> Aperçu élève (fidèle, sans boutons d'édition)
+            <Eye className="size-3.5" /> Aperçu élève (fidèle, sans boutons d’édition)
           </p>
           <button type="button" className="btn-ligne" onClick={() => setApercuGlobal(false)}>
-            <Pencil className="size-4" /> Revenir à l'édition
+            <Pencil className="size-4" /> Revenir à l’édition
           </button>
         </div>
         {visibles.length === 0 ? (
           <p className="carte px-8 py-14 text-center font-semibold text-encre/45">
-            Aucun contenu visible pour l'élève.
+            Aucun contenu visible pour l’élève.
           </p>
         ) : (
           visibles.map((b) => (
@@ -302,7 +302,7 @@ export function EditeurPedagogique({
           </span>
           <h2 className="font-titre mt-4 text-2xl font-bold">Commencez votre parcours pédagogique</h2>
           <p className="mt-2 max-w-sm font-semibold text-encre-doux">
-            Ajoutez du texte, des images, de l'audio, de la vidéo et vos exercices — dans l'ordre
+            Ajoutez du texte, des images, de l’audio, de la vidéo et vos exercices — dans l’ordre
             que vous choisissez.
           </p>
           <BoutonAjouter position={0} onOuvrir={ouvrirModale} />

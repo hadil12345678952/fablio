@@ -490,17 +490,32 @@ export function JoueurExercice({
   const [resultat, setResultat] = useState<ResultatVue | null>(null);
   const [enCours, setEnCours] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
-  const debut = useRef(Date.now());
+  // Chronomètre de la tentative — correction (2026-10) : `useRef(Date.now())`
+  // appelait une fonction impure PENDANT le rendu (rejeté par le compilateur
+  // React). Le repère est désormais posé dans un effet ; à défaut d'effet encore
+  // exécuté (premier rendu), la durée vaut 0 plutôt qu'un temps inventé.
+  const debut = useRef<number | null>(null);
   const router = useRouter();
 
   const epuise =
     mode === "jeu" && exercice.tentativesRestantes === 0 && phase === "jeu";
   const verrouille = phase === "resultat" || enCours;
 
+  // Repère du chronomètre posé HORS du rendu : à chaque exercice différent (et à
+  // chaque nouvelle tentative, quand `tentativesUtilisees` change), on repart de
+  // zéro. C'est l'équivalent exact de l'ancien `useRef(Date.now())`, sauf que le
+  // temps n'est plus mesuré pendant le rendu du composant.
+  useEffect(() => {
+    debut.current = Date.now();
+  }, [exercice.id, exercice.tentativesUtilisees]);
+
   async function validerReponse() {
     if (!valide || reponse === null) return;
     setErreur(null);
-    const dureeSecondes = Math.round((Date.now() - debut.current) / 1000);
+    const dureeSecondes =
+      debut.current === null
+        ? 0
+        : Math.max(0, Math.round((Date.now() - debut.current) / 1000));
 
     if (mode === "apercu") {
       const note = noterExercice(exercice.type, exercice.payload, reponse, exercice.points);

@@ -36,19 +36,30 @@ export function RenduParcoursFable({
 
   // Premier bloc TEXTE visible : on y accroche la synthèse vocale (contexte fable).
   const indicePremierTexte = visibles.findIndex((b) => b.type === "texte");
-  const nbExercices = visibles.filter((b) => b.type === "exercice").length;
-  let compteurExercice = 0;
+
+  // NUMÉROTATION DES EXERCICES — calculée en une passe AVANT le rendu.
+  // Correction (2026-10) : le numéro était tenu par un `let compteurExercice`
+  // muté à l'intérieur du `.map()` du JSX. Un composant React doit être pur :
+  // cette mutation survivait mal aux re-rendus et était signalée en erreur par
+  // le compilateur React (règle « Cannot reassign variable after render »).
+  // Le comportement affiché est strictement identique : tout bloc de type
+  // « exercice » consomme un numéro, y compris celui qui ne rend rien faute de
+  // données rattachées (choix d'origine, conservé pour ne pas décaler les cartes).
+  const numerosExercices = new Map<string, number>();
+  let numeroCourant = 0;
+  for (const bloc of visibles) {
+    if (bloc.type === "exercice") {
+      numeroCourant += 1;
+      numerosExercices.set(bloc.id, numeroCourant);
+    }
+  }
 
   return (
     <div className="space-y-6">
-      {/* Séparateur décoratif billes des exercices */}
-      {nbExercices > 0 && null}
-
       {visibles.map((b) => {
         switch (b.type) {
           case "texte": {
             const c = b.contenu as ContenuTexte;
-            compteurExercice += 0;
             const estPremier = b.id === visibles[indicePremierTexte]?.id;
             return (
               <article key={b.id} className="carte overflow-hidden px-6 py-6 sm:px-10 sm:py-8">
@@ -161,7 +172,7 @@ export function RenduParcoursFable({
           }
 
           case "exercice": {
-            compteurExercice += 1;
+            const numero = numerosExercices.get(b.id) ?? 0;
             if (!b.exerciceEleve && !b.exerciceEnseignant) return null;
             const exoEleve = b.exerciceEleve ?? {
               id: b.exerciceEnseignant!.id,
@@ -183,7 +194,7 @@ export function RenduParcoursFable({
               <section key={b.id} className="carte overflow-hidden px-4 py-5 sm:px-8 sm:py-6">
                 <div className="mb-4 flex items-center gap-2.5">
                   <span className="font-titre grid size-9 place-items-center rounded-xl bg-corail text-sm font-bold text-white">
-                    {compteurExercice}
+                    {numero}
                   </span>
                   {(b.titre || b.exerciceEnseignant?.consigne) && (
                     <p className="font-titre text-lg font-bold">{b.titre}</p>
@@ -192,7 +203,7 @@ export function RenduParcoursFable({
                 <JoueurExercice
                   key={`${exoEleve.id}${mode === "eleve" ? `-t${exoEleve.tentativesUtilisees}` : ""}`}
                   exercice={exoEleve}
-                  numero={mode === "eleve" ? compteurExercice : undefined}
+                  numero={mode === "eleve" ? numero : undefined}
                   mode={mode === "eleve" ? "jeu" : "apercu"}
                 />
               </section>
