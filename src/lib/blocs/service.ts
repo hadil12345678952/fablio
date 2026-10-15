@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, asc, inArray } from "drizzle-orm";
+import { and, eq, asc, gte } from "drizzle-orm";
 import { db } from "@/db";
 import { blocsFable, exercices, fables, type BlocFableRow, type ExerciceRow } from "@/db/schema";
 import { sql } from "drizzle-orm";
@@ -39,36 +39,41 @@ export async function blocPossede(blocId: string, enseignantId: string) {
 
 type TxDrizzle = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-/** Réécrit les ordres de la fable de façon contiguë 0..n-1 (dans une transaction). */
+/**
+ * Réécrit les ordres de la fable de façon contiguë 0..n-1 (dans une transaction).
+ *
+ * CORRECTIF (2026-10) — l'ORDRE RELATIF existant est désormais préservé.
+ *
+ * La première passe doit être une translation MONOTONE des valeurs hors de la
+ * plage cible : elle décale donc tout vers le haut (+DECALAGE), ce qui ne change
+ * pas le tri. L'implémentation précédente utilisait « ordre = -ordre - 1 » : les
+ * valeurs devenaient négatives et DÉCROISSANTES, si bien que le tri de la
+ * seconde passe (ORDER BY ordre) classait les blocs à l'envers et que chaque
+ * création/suppression retournait le parcours (le nouveau bloc arrivait en
+ * tête). La seconde passe ajoute `id` comme départage pour rendre le résultat
+ * déterministe même si deux blocs partagent le même horodatage.
+ */
+const DECALAGE_ORDRES = 1_000_000; // ≫ nombre de blocs possible dans une fable
+
 async function normaliserOrdres(tx: TxDrizzle, fableId: string): Promise<void> {
-  // On force un jeu de valeurs temporaires négatives puis les ordres cibles,
-  // pour éviter toute collision pendant le réordonnancement multi-lignes.
   await tx.execute(sql`
-    UPDATE blocs_fable SET ordre = -ordre - 1 WHERE fable_id = ${fableId}
+    UPDATE blocs_fable SET ordre = ordre + ${DECALAGE_ORDRES} WHERE fable_id = ${fableId}
   `);
   await tx.execute(sql`
     UPDATE blocs_fable b
     SET ordre = sub.n - 1
     FROM (
-      SELECT id, ROW_NUMBER() OVER (ORDER BY ordre, cree_le) AS n
+      SELECT id, ROW_NUMBER() OVER (ORDER BY ordre, cree_le, id) AS n
       FROM blocs_fable WHERE fable_id = ${fableId}
     ) sub
     WHERE b.id = sub.id AND b.fable_id = ${fableId}
   `);
 }
 
-/** Charge et verrouille les blocs d'une fable pour modification. */
-async function blocsVerrouilles(fableId: string) {
-  return db.transaction(async (tx) => {
-    const lignes = await tx
-      .select()
-      .from(blocsFable)
-      .where(eq(blocsFable.fableId, fableId))
-      .orderBy(asc(blocsFable.ordre))
-      .for("update");
-    return { tx, lignes };
-  });
-}
+// (La fonction `blocsVerrouilles()` a été supprimée : jamais appelée, et son
+//  implémentation renvoyait `tx` APRÈS la fin de la transaction, donc le verrou
+//  FOR UPDATE était déjà relâché — piège pour de futurs appels. Le verrouillage
+//  est fait en ligne dans `creerBlocInterne()` et `reordonnerBlocs()`.)
 
 // ----- CRUD -------------------------------------------------------------------
 
@@ -135,24 +140,21 @@ async function creerBlocInterne(
       params.position < n;
 
     if (doInsertAt) {
-      // Décale les blocs existants à partir de la position d'insertion,
-      // AVANT d'insérer, en déplaçant d'abord vers le négatif pour éviter les collisions.
-      for (const l of lignes) {
-        if (l.ordre >= params.position!) {
-          await tx
-            .update(blocsFable)
-            .set({ ordre: -(l.ordre + 2) })
-            .where(and(eq(blocsFable.id, l.id), eq(blocsFable.fableId, fableId)));
-        }
-      }
-      for (const l of lignes) {
-        if (l.ordre >= params.position!) {
-          await tx
-            .update(blocsFable)
-            .set({ ordre: l.ordre + 1 })
-            .where(and(eq(blocsFable.id, l.id), eq(blocsFable.fableId, fableId)));
-        }
-      }
+      // Décale d'un rang les blocs situés à partir de la position d'insertion.
+      // Un SEUL UPDATE suffit : PostgreSQL évalue toutes les lignes avec leurs
+      // valeurs d'origine (donc sans collision) et l'ordre relatif est conservé.
+      // (L'ancienne double boucle utilisait des valeurs négatives décroissantes :
+      //  elle inversait les blocs décalés — corrigé en même temps que
+      //  normaliserOrdres ci-dessus.)
+      await tx
+        .update(blocsFable)
+        .set({ ordre: sql`${blocsFable.ordre} + 1` })
+        .where(
+          and(
+            eq(blocsFable.fableId, fableId),
+            gte(blocsFable.ordre, params.position!)
+          )
+        );
     }
 
     const ordre = doInsertAt ? params.position! : n;

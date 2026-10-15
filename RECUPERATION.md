@@ -44,18 +44,35 @@ Connexion → « Mot de passe oublié ? »
 
 ### Envoi du courriel
 
-`src/lib/courriel.ts` — sans dépendance :
+`src/lib/courriel.ts` — sans dépendance (appel HTTP direct à l'API Resend) :
 
-- **`RESEND_API_KEY` défini** → le message part réellement (API Resend).
-- **Non défini** → le message (et le lien) est écrit dans les **journaux du
-  serveur**, jamais renvoyé au navigateur. L'administrateur de
-  l'établissement peut alors transmettre le lien à l'enseignant.
+- **`RESEND_API_KEY` défini** → le message part réellement, avec **un nouvel
+  essai** en cas d'incident réseau/429/5xx et une **clé d'idempotence** (aucun
+  doublon possible).
+- **Clé absente** → le message (et le lien) est écrit dans les **journaux du
+  serveur**, jamais renvoyé au navigateur.
+- **Échec d'envoi (403, 422, réseau…)** → la raison exacte **et le message
+  complet** (donc le lien) sont journalisés : l'administrateur de
+  l'établissement peut toujours transmettre le lien à l'enseignant, le compte
+  n'est **jamais** définitivement perdu.
 
 ```env
-RESEND_API_KEY="re_…"                       # optionnel
-COURRIEL_EXPEDITEUR="Fablio <no-reply@ecole.tn>"
-NEXT_PUBLIC_URL_SITE="https://fablio.vercel.app"   # pour construire le lien
+RESEND_API_KEY="re_…"                              # nécessaire pour un envoi réel
+COURRIEL_EXPEDITEUR="Fablio <no-reply@ecole.tn>"   # ⚠ voir ci-dessous
+NEXT_PUBLIC_URL_SITE="https://fablio.vercel.app"   # recommandé : lien stable
 ```
+
+> ⚠️ **Pourquoi les enseignants ne recevaient pas le courriel.**
+> L'expéditeur par défaut est `Fablio <onboarding@resend.dev>` : c'est l'adresse
+> de **test** de Resend, qui n'autorise comme destinataire **que l'adresse du
+> titulaire du compte Resend** (toute autre adresse est refusée en 403
+> « You can only send testing emails to your own email address »). Pour envoyer
+> aux enseignants : **vérifiez un domaine** dans Resend (SPF + DKIM) puis
+> indiquez une adresse de ce domaine dans `COURRIEL_EXPEDITEUR`.
+>
+> **Diagnostic en une requête** : `GET /api/health` →
+> `{"ok":true,"courriel":"resend"}` (envoi actif) ou `{"ok":true,"courriel":"journal"}`
+> (aucun courriel ne partira : le lien est seulement dans les journaux).
 
 ---
 

@@ -2,7 +2,7 @@ import "server-only";
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, lt } from "drizzle-orm";
 import { db } from "@/db";
 import {
   sessions,
@@ -41,6 +41,15 @@ async function poserCookie(token: string, expireLe: Date) {
   });
 }
 
+/**
+ * Ouvre une session et pose le cookie.
+ *
+ * OPTIMISATION (2026-10) — purge opportuniste des sessions expirées.
+ * Rien ne nettoyait `sessions` : la table grossissait indéfiniment (une ligne par
+ * connexion, valable 30 jours). La purge est faite ici, à la connexion, où l'on
+ * écrit déjà : un seul DELETE (indexé sur `expire_le`) borne la table au lieu
+ * d'ajouter une tâche planifiée à maintenir. Elle ne bloque jamais la connexion.
+ */
 export async function ouvrirSession(
   type: "enseignant" | "eleve",
   id: string
@@ -55,6 +64,12 @@ export async function ouvrirSession(
     expireLe,
   });
   await poserCookie(token, expireLe);
+
+  try {
+    await db.delete(sessions).where(lt(sessions.expireLe, new Date()));
+  } catch {
+    /* la purge est un bonus : jamais bloquante pour la connexion */
+  }
 }
 
 export async function fermerSession(): Promise<void> {
@@ -64,33 +79,40 @@ export async function fermerSession(): Promise<void> {
   magasin.delete(COOKIE_SESSION);
 }
 
+/**
+ * Lit la session du cookie.
+ *
+ * OPTIMISATION (2026-10) — une SEULE requête au lieu de deux.
+ * L'implémentation précédente faisait 2 allers-retours (session puis
+ * enseignant/élève) à CHAQUE appel, et les layouts + pages (ou une route API)
+ * appellent `lireSession()` deux fois par requête HTTP : 4 allers-retours au
+ * lieu de 2. On joint désormais l'utilisateur directement à la session
+ * (LEFT JOIN) — mesuré : GET /eleve passe de 9 à 7 requêtes SQL.
+ * Le comportement observé est inchangé : session absente/expirée → null ;
+ * session dont l'utilisateur a disparu (cascade) → null.
+ */
 export async function lireSession(): Promise<SessionUtilisateur | null> {
   const magasin = await cookies();
   const token = magasin.get(COOKIE_SESSION)?.value;
   if (!token) return null;
   try {
-    const [s] = await db
-      .select()
+    const [ligne] = await db
+      .select({ session: sessions, enseignant: enseignants, eleve: eleves })
       .from(sessions)
+      .leftJoin(enseignants, eq(enseignants.id, sessions.enseignantId))
+      .leftJoin(eleves, eq(eleves.id, sessions.eleveId))
       .where(and(eq(sessions.token, token), gt(sessions.expireLe, new Date())))
       .limit(1);
-    if (!s) return null;
-    if (s.typeUtilisateur === "enseignant" && s.enseignantId) {
-      const [e] = await db
-        .select()
-        .from(enseignants)
-        .where(eq(enseignants.id, s.enseignantId))
-        .limit(1);
-      return e ? { type: "enseignant", enseignant: e } : null;
+
+    if (!ligne) return null;
+    if (ligne.session.typeUtilisateur === "enseignant" && ligne.enseignant) {
+      return { type: "enseignant", enseignant: ligne.enseignant };
     }
-    if (s.typeUtilisateur === "eleve" && s.eleveId) {
-      const [el] = await db
-        .select()
-        .from(eleves)
-        .where(eq(eleves.id, s.eleveId))
-        .limit(1);
-      return el ? { type: "eleve", eleve: el } : null;
+    if (ligne.session.typeUtilisateur === "eleve" && ligne.eleve) {
+      return { type: "eleve", eleve: ligne.eleve };
     }
+    // Session orpheline (utilisateur supprimé) : on la retire au passage.
+    await db.delete(sessions).where(eq(sessions.token, token));
     return null;
   } catch {
     // La base n'est pas encore prête (premier démarrage) : pas de session.

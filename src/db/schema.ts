@@ -212,17 +212,28 @@ export const jetonsReinitialisation = pgTable(
 // ---------------------------------------------------------------------------
 // Sessions (cookie httpOnly)
 // ---------------------------------------------------------------------------
-export const sessions = pgTable("sessions", {
-  token: text("token").primaryKey(),
-  typeUtilisateur: text("type_utilisateur").notNull(), // enseignant | eleve
-  enseignantId: uuid("enseignant_id").references(() => enseignants.id, {
-    onDelete: "cascade",
-  }),
-  eleveId: uuid("eleve_id").references(() => eleves.id, {
-    onDelete: "cascade",
-  }),
-  expireLe: timestamp("expire_le", { withTimezone: true }).notNull(),
-});
+export const sessions = pgTable(
+  "sessions",
+  {
+    token: text("token").primaryKey(),
+    typeUtilisateur: text("type_utilisateur").notNull(), // enseignant | eleve
+    enseignantId: uuid("enseignant_id").references(() => enseignants.id, {
+      onDelete: "cascade",
+    }),
+    eleveId: uuid("eleve_id").references(() => eleves.id, {
+      onDelete: "cascade",
+    }),
+    expireLe: timestamp("expire_le", { withTimezone: true }).notNull(),
+  },
+  // OPTIMISATION (2026-10) : les clés étrangères n'ont pas d'index automatique.
+  // Les index ci-dessous accélèrent la révocation des sessions d'un compte
+  // (réinitialisation de mot de passe) et la purge des sessions expirées.
+  (t) => [
+    index("idx_sessions_enseignant").on(t.enseignantId),
+    index("idx_sessions_eleve").on(t.eleveId),
+    index("idx_sessions_expire").on(t.expireLe),
+  ]
+);
 
 // Types pratiques
 export type EnseignantRow = typeof enseignants.$inferSelect;

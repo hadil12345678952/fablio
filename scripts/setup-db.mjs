@@ -26,7 +26,7 @@ BEGIN;
 CREATE TABLE IF NOT EXISTS enseignants (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   nom text NOT NULL,
-  email text NOT NULL UNIQUE,
+  email text NOT NULL CONSTRAINT enseignants_email_unique UNIQUE,
   mot_de_passe_hash text NOT NULL,
   cree_le timestamptz NOT NULL DEFAULT now()
 );
@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS enseignants (
 CREATE TABLE IF NOT EXISTS codes_parrainage (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   enseignant_id uuid NOT NULL REFERENCES enseignants(id) ON DELETE CASCADE,
-  code text NOT NULL UNIQUE,
+  code text NOT NULL CONSTRAINT codes_parrainage_code_unique UNIQUE,
   etiquette text NOT NULL DEFAULT '',
   actif boolean NOT NULL DEFAULT true,
   cree_le timestamptz NOT NULL DEFAULT now()
@@ -139,12 +139,33 @@ CREATE INDEX IF NOT EXISTS idx_tentatives_exercice ON tentatives(exercice_id);
 CREATE INDEX IF NOT EXISTS idx_tentatives_fable ON tentatives(fable_id);
 CREATE INDEX IF NOT EXISTS idx_blocs_fable_ordre ON blocs_fable(fable_id, ordre);
 CREATE INDEX IF NOT EXISTS idx_blocs_exercice ON blocs_fable(exercice_id);
+-- Les clés étrangères ne sont pas indexées automatiquement par PostgreSQL :
+-- ces index servent à la révocation des sessions et à la purge des expirées.
+CREATE INDEX IF NOT EXISTS idx_sessions_enseignant ON sessions(enseignant_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_eleve ON sessions(eleve_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expire ON sessions(expire_le);
 
 -- ---------- Contraintes d'unicité manquantes sur bases déjà créées ---------
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'uq_eleves_pseudo_enseignant') THEN
     CREATE UNIQUE INDEX uq_eleves_pseudo_enseignant ON eleves(enseignant_id, pseudo);
+  END IF;
+END $$;
+
+-- ---------- Noms de contraintes alignés sur Drizzle (drizzle-kit push) ------
+-- PostgreSQL nomme « <table>_<colonne>_key » les contraintes UNIQUE déclarées
+-- en ligne, alors que Drizzle attend « <table>_<colonne>_unique ». Sans cette
+-- mise en cohérence, drizzle-kit push (utilisé par la configuration Vercel)
+-- tente d'ajouter une SECONDE contrainte unique identique — et pose une question
+-- interactive (truncate ?) qui fait ÉCHOUER le build en CI (pas de TTY).
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'enseignants_email_key') THEN
+    ALTER TABLE enseignants RENAME CONSTRAINT enseignants_email_key TO enseignants_email_unique;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'codes_parrainage_code_key') THEN
+    ALTER TABLE codes_parrainage RENAME CONSTRAINT codes_parrainage_code_key TO codes_parrainage_code_unique;
   END IF;
 END $$;
 
