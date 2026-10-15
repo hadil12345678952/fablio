@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { erreurJson, lireCorps, chaine } from "@/lib/api";
+import { erreurJson, lireCorps, chaine, originePublique } from "@/lib/api";
 import { creerDemandeReinitialisation } from "@/lib/recuperation";
 import { envoyerCourriel } from "@/lib/courriel";
 
@@ -19,11 +19,10 @@ export async function POST(req: Request) {
   const demande = await creerDemandeReinitialisation(email);
 
   if (demande) {
-    const base =
-      process.env.NEXT_PUBLIC_URL_SITE?.replace(/\/+$/, "") ||
-      new URL(req.url).origin;
+    // Origine publique : NEXT_PUBLIC_URL_SITE de préférence (voir originePublique).
+    const base = originePublique(req);
     const lien = `${base}/mot-de-passe/reinitialiser?jeton=${encodeURIComponent(demande.jeton)}`;
-    await envoyerCourriel({
+    const envoi = await envoyerCourriel({
       destinataire: email,
       sujet: "Fablio — réinitialisation de votre mot de passe",
       texte:
@@ -33,6 +32,11 @@ export async function POST(req: Request) {
         `Si vous n'êtes pas à l'origine de cette demande, ignorez ce message : ` +
         `votre mot de passe actuel reste valable.\n\n— Fablio`,
     });
+    // Trace exploitable par l'administration : ni le jeton ni le lien ne sont
+    // renvoyés au navigateur (voir la réponse neutre plus bas).
+    console.info(
+      `[fablio:recuperation] demande traitée — livraison=${envoi.statut} destinataire=${email} détail=${envoi.detail}`
+    );
   }
 
   // Message unique : ni confirmation ni infirmation de l'existence du compte.

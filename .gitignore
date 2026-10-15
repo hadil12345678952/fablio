@@ -17,6 +17,13 @@ next-env.d.ts
 .env.production.local
 .env.production
 
+# Jarres de cookies (curl -c) et sorties de tests locaux : contiennent des jetons
+# de session valides — ne doivent JAMAIS être versionnées.
+*cookies.txt
+cookies*.txt
+ke.txt
+kl.txt
+
 # Divers
 .DS_Store
 *.pem

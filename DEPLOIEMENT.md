@@ -87,6 +87,51 @@ historique automatique) — mais la création de blocs nécessite le schéma.
 
 Alternative Drizzle (équivalente) : `DATABASE_URL="…" npx drizzle-kit push`.
 
+> 🔴 **À FAIRE UNE FOIS avant le premier déploiement du correctif sur une base
+> EXISTANTE** (celle qui tourne aujourd'hui en production) : le nom des contraintes
+> `UNIQUE` a changé pour correspondre à Drizzle. Tant que la base n'est pas alignée,
+> `npx drizzle-kit push` (que le build Vercel enchaîne) cherche à ajouter une seconde
+> contrainte identique et **pose une question** → sans terminal, il **fait échouer le
+> build**. La mise à niveau est idempotente et sans effet sur les données :
+>
+> ```bash
+> DATABASE_URL="postgresql://…neon.tech/neondb?sslmode=require" node scripts/setup-db.mjs
+> ```
+>
+> (Cette commande renomme `enseignants_email_key` → `enseignants_email_unique`,
+> `codes_parrainage_code_key` → `codes_parrainage_code_unique`, crée les index manquants
+> de `sessions` et ne touche à aucune donnée.)
+> Vérification après coup : `DATABASE_URL="…" npx drizzle-kit push` doit répondre
+> `[i] No changes detected`. Si la base a été créée par `drizzle-kit push`, elle est
+> déjà alignée : rien à faire.
+>
+> ✅ **Cohérence `setup-db.mjs` ↔ Drizzle** : les noms de contraintes ont été alignés
+> (`enseignants_email_unique`, `codes_parrainage_code_unique`) et les index de `sessions`
+> ajoutés au schéma. Vérifié en non interactif : `npx drizzle-kit push` ne propose plus
+> **aucune** modification sur une base déjà créée par `setup-db.mjs`
+> (`[i] No changes detected`), et sur une base vierge il crée les **9 tables** et les
+> **25 index** — identiques, colonne par colonne et index par index.
+>
+> ⚠️ Si un build échoue avec `Interactive prompts require a TTY terminal`, c'est que
+> `drizzle-kit push` détecte une différence de schéma (par exemple des **tables Moodle
+> résiduelles** qu'il veut supprimer) et pose une question : lancez alors **une fois**
+> `DATABASE_URL="…" npx drizzle-kit push` depuis un poste avec terminal, lisez ce qui est
+> proposé, puis relancez le déploiement. Pour supprimer les tables Moodle volontairement :
+> `DATABASE_URL="…" node scripts/setup-db.mjs --supprimer-moodle`.
+
+### 2.2 bis Vérifier la récupération de mot de passe (enseignants)
+
+```bash
+curl -s https://VOTRE-SITE/api/health      # → {"ok":true,"courriel":"resend"|"journal"}
+```
+
+- `"journal"` : **aucun** courriel ne partira (le lien n'existe que dans les journaux) ;
+- `"resend"` : envoi actif — vérifiez que `COURRIEL_EXPEDITEUR` utilise un **domaine
+  vérifié** dans Resend (l'adresse de test `onboarding@resend.dev` n'accepte que
+  l'adresse du titulaire du compte) ;
+- définissez aussi `NEXT_PUBLIC_URL_SITE` pour que le lien du courriel pointe vers votre
+  domaine. Détails : `docs/correctifs-appliques.md` §1 et `RECUPERATION.md`.
+
 ### 2.3 (Recommandé si l'app contenait déjà des fables) Migrer le parcours
 
 ```bash
@@ -173,6 +218,12 @@ Si `/api/health` renvoie `{"ok":false}`, voir Dépannage §8.
   poste** (avec l'URL Neon) : `DATABASE_URL="…" npx drizzle-kit push`, et commitez le
   code correspondant. L'ordre compte : poussez le schéma **avant** le code qui
   l'utilise.
+- **Si la commande de build Vercel fait déjà `npx drizzle-kit push && npm run build`** :
+  c'est supporté et idempotent, à condition que le schéma Drizzle et la base soient
+  alignés (§2.2). Un push sans différence ne pose aucune question et n'écrit rien ; un
+  push **avec** différence destructive (suppression de table/colonne) exige un terminal
+  et **fait échouer le build** — par sécurité, préférez pousser le schéma depuis votre
+  poste et laissez le build se contenter de compiler.
 - **Logs** : Vercel → projet → **Logs / Functions** ; côté base : Neon → **Monitoring**.
 
 ---
