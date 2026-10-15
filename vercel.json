@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "installCommand": "npm ci",
+  "buildCommand": "node scripts/vercel-build.mjs",
+  "functions": {
+    "src/app/api/tts/route.ts": { "maxDuration": 60 },
+    "src/app/api/enseignant/export/resultats.csv/route.ts": { "maxDuration": 30 }
+  }
+}

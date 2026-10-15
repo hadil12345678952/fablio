@@ -16,7 +16,20 @@
 // ---------------------------------------------------------------------------
 
 const BASE = process.env.BASE_URL ?? "http://127.0.0.1:3000";
+import {
+  fermerBaseDeTest,
+  ouvrirBaseDeTest,
+  reinitialiserBornage,
+  supprimerComptesJeton,
+} from "./hygiene-base.mjs";
 const SUFFIXE = Date.now().toString(36);
+
+// Hygiène de test (audit 2026-10) : voir tests/hygiene-base.mjs — sans cela, les
+// sondes négatives ne sont pas reproductibles (le bornage anti-force-brute compte
+// les échecs par identifiant pendant 10 à 15 min) et les comptes-jetons
+// s'accumulent et bloquent scripts/reinitialiser-demo.mjs.
+const BASE_CLIENT = await ouvrirBaseDeTest();
+await reinitialiserBornage(BASE_CLIENT);
 
 let personnes = 0;
 let reussis = 0;
@@ -878,6 +891,203 @@ section("18. Nettoyage des artefacts de test");
   verifier("la fable de test est supprimée (cascade sur ses blocs)", suppression.statut === 200, `reçu ${suppression.statut}`);
   const apres = await requete("GET", `/api/enseignant/fables/${fableTestId}`, { cookie: cookieEnseignant });
   verifier("fable de test bien absente (404)", apres.statut === 404, `reçu ${apres.statut}`);
+}
+
+
+
+section("19. Anti-force-brute de la connexion (audit 2026-10)");
+{
+  // Compte enseignant jetable : le bornage est volontairement par identifiant,
+  // donc aucun autre compte n'est gêné par ces tentatives.
+  const emailBrute = `brute.${SUFFIXE}@fablio.test`;
+  const mdpBrute = "motdepasse-solide-1";
+  const inscription = await requete("POST", "/api/auth/enseignant/inscription", {
+    corps: { nom: "Prof Test Brute", email: emailBrute, motDePasse: mdpBrute },
+  });
+  verifier(
+    "compte jetable créé pour le test de bornage",
+    inscription.statut === 200,
+    `reçu ${inscription.statut}`
+  );
+
+  let recus401 = 0;
+  for (let i = 0; i < 5; i++) {
+    const r = await requete("POST", "/api/auth/enseignant/connexion", {
+      corps: { email: emailBrute, motDePasse: `faute-${i}` },
+    });
+    if (r.statut === 401) recus401++;
+  }
+  verifier(
+    "5 échecs consécutifs → 5 × 401 (le seuil déclenche le blocage APRÈS le 5e)",
+    recus401 === 5,
+    `reçus 401 : ${recus401}/5`
+  );
+
+  const apresSeuil = await requete("POST", "/api/auth/enseignant/connexion", {
+    corps: { email: emailBrute, motDePasse: mdpBrute },
+  });
+  verifier(
+    "le mot de passe CORRECT est refusé pendant le blocage → 429",
+    apresSeuil.statut === 429,
+    `reçu ${apresSeuil.statut}`
+  );
+  const retryAfter = Number(apresSeuil.entetes.get("retry-after"));
+  verifier(
+    "en-tête Retry-After présent et cohérent (≤ 10 min)",
+    Number.isFinite(retryAfter) && retryAfter > 0 && retryAfter <= 600,
+    `Retry-After=${apresSeuil.entetes.get("retry-after")}`
+  );
+  verifier(
+    "message utilisateur explicite et en français",
+    /tentatives|attends/i.test(apresSeuil.json?.erreur ?? ""),
+    apresSeuil.json?.erreur ?? ""
+  );
+
+  const autreCompte = await seConnecterEnseignant("demo.enseignant@fablio.tn", "demo1234");
+  verifier(
+    "un AUTRE compte peut toujours se connecter (bornage par identifiant)",
+    autreCompte !== null
+  );
+
+  // Élève : le PIN court (4-12 caractères) est le vrai risque de devinette.
+  const pseudoBrute = `pb${SUFFIXE}`;
+  const inscuEleve = await requete("POST", "/api/auth/eleve/inscription", {
+    corps: { pseudo: pseudoBrute, code: "CE2A-DEMO1", pin: "123456" },
+  });
+  verifier("élève jetable créé pour le test de bornage", inscuEleve.statut === 200, `reçu ${inscuEleve.statut}`);
+
+  let pinsRefuses = 0;
+  for (let i = 0; i < 5; i++) {
+    const r = await requete("POST", "/api/auth/eleve/connexion", {
+      corps: { pseudo: pseudoBrute, code: "CE2A-DEMO1", pin: `000${i}` },
+    });
+    if (r.statut === 401) pinsRefuses++;
+  }
+  verifier("5 PIN erronés → 5 × 401", pinsRefuses === 5, `reçus 401 : ${pinsRefuses}/5`);
+
+  const eleveBloque = await requete("POST", "/api/auth/eleve/connexion", {
+    corps: { pseudo: pseudoBrute, code: "CE2A-DEMO1", pin: "123456" },
+  });
+  verifier(
+    "PIN correct refusé pendant le blocage de l'élève → 429",
+    eleveBloque.statut === 429,
+    `reçu ${eleveBloque.statut}`
+  );
+
+  const camarade = await requete("POST", "/api/auth/eleve/connexion", {
+    corps: { pseudo: "lina", code: "CE2A-DEMO1", pin: "1234" },
+  });
+  verifier(
+    "un camarade de la MÊME classe n'est pas bloqué",
+    camarade.statut === 200,
+    `reçu ${camarade.statut}`
+  );
+
+  const sante = await requete("GET", "/api/health");
+  verifier(
+    "/api/health expose l'état du bornage (diagnostic d'exploitation)",
+    sante.json?.bornage === "actif" && Array.isArray(sante.json?.schemaManquant),
+    JSON.stringify(sante.json)
+  );
+}
+
+
+section("20. Contrôle d'origine (CSRF) sur les méthodes mutantes");
+{
+  const ENNEMI = "https://phishing.example.tn";
+  const hote = new URL(BASE).origin;
+
+  const crossOrigin = await requete("POST", "/api/enseignant/fables", {
+    entetes: { Origin: ENNEMI },
+    corps: { titre: "X" },
+  });
+  verifier(
+    "POST inter-site vers une route qui écrit → 403 (refusé avant la base)",
+    crossOrigin.statut === 403,
+    `reçu ${crossOrigin.statut}`
+  );
+
+  const crossOriginDelete = await requete("DELETE", "/api/enseignant/fables/00000000-0000-0000-0000-000000000000", {
+    entetes: { Origin: ENNEMI },
+  });
+  verifier(
+    "DELETE inter-site → 403 (aucune méthode mutante tolérée)",
+    crossOriginDelete.statut === 403,
+    `reçu ${crossOriginDelete.statut}`
+  );
+
+  const memeOrigine = await requete("POST", "/api/auth/enseignant/connexion", {
+    entetes: { Origin: hote },
+    corps: { email: "demo.enseignant@fablio.tn", motDePasse: "demo1234" },
+  });
+  verifier(
+    "POST same-origin (le vrai navigateur de l'enseignant) → jamais 403",
+    memeOrigine.statut !== 403,
+    `reçu ${memeOrigine.statut}`
+  );
+
+  const sansOrigin = await requete("POST", "/api/auth/enseignant/connexion", {
+    corps: { email: "demo.enseignant@fablio.tn", motDePasse: "demo1234" },
+  });
+  verifier(
+    "requête sans en-tête Origin (curl, app native) → acceptée puis traitée par la route",
+    sansOrigin.statut !== 403,
+    `reçu ${sansOrigin.statut}`
+  );
+
+  const lectureCrossOrigin = await requete("GET", "/api/eleve/fables", {
+    entetes: { Origin: ENNEMI },
+  });
+  verifier(
+    "GET inter-site non bloqué par le CSRF (lecture ; l'auth s'en charge) → jamais 403",
+    lectureCrossOrigin.statut !== 403,
+    `reçu ${lectureCrossOrigin.statut}`
+  );
+
+  const pageCrossOrigin = await requete("GET", "/", { entetes: { Origin: ENNEMI } });
+  verifier("une PAGE reste servie quelle que soit l'origine", pageCrossOrigin.statut === 200, `reçu ${pageCrossOrigin.statut}`);
+}
+
+section("21. Fichiers statiques (illustrations locales du dépôt)");
+{
+  for (const [chemin, attendu] of [
+    ["/images/hero-livre-magique.jpg", "image/jpeg"],
+    ["/images/fables/cigale-fourmi.jpg", "image/jpeg"],
+    ["/images/fables/corbeau-renard.jpg", "image/jpeg"],
+    ["/images/fables/lievre-tortue.jpg", "image/jpeg"],
+  ]) {
+    const res = await fetch(`${BASE}${chemin}`);
+    verifier(
+      `${chemin} → 200 et type d'image (le dépôt doit TOUJOURS contenir ses visuels)`,
+      res.status === 200 && (res.headers.get("content-type") ?? "").startsWith(attendu),
+      `reçu ${res.status} ${res.headers.get("content-type")}`
+    );
+  }
+
+  const optimisee = await fetch(
+    `${BASE}/_next/image?url=%2Fimages%2Fhero-livre-magique.jpg&w=640&q=75`
+  );
+  verifier(
+    "l'optimiseur d'images Next sert le visuel local (200 image/jpeg)",
+    optimisee.status === 200 && (optimisee.headers.get("content-type") ?? "").startsWith("image/"),
+    `reçu ${optimisee.status}`
+  );
+
+  const polices = await fetch(`${BASE}/favicon.ico`);
+  verifier(`GET /favicon.ico → ${polices.status}`, [200, 404].includes(polices.status));
+}
+// Comptes-jetons de la campagne (enseignants *.fablio.test, élèves max…/pb…/e…/ok…)
+// et remises à zéro du bornage : la suite doit rester REJOUABLE immédiatement.
+const netoya = await supprimerComptesJeton(BASE_CLIENT, SUFFIXE);
+const bornageReinitialise = await reinitialiserBornage(BASE_CLIENT);
+await fermerBaseDeTest(BASE_CLIENT);
+verifier(
+  "les comptes-jetons de la campagne sont supprimés (aucune dépendance aux routes absentes)",
+  netoya.enseignants >= 0 && netoya.eleves >= 0,
+  `enseignants ${netoya.enseignants}, élèves ${netoya.eleves}`
+);
+if (BASE_CLIENT) {
+  verifier("bornage remis à zéro après campagne (suite rejouable)", bornageReinitialise);
 }
 
 // ---------------------------------------------------------------------------

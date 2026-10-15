@@ -7,6 +7,22 @@ export function erreurJson(message: string, statut = 400): NextResponse {
   return NextResponse.json({ erreur: message }, { status: statut });
 }
 
+/**
+ * 429 Too Many Requests + `Retry-After` — réponse de bornage (anti-force-brute).
+ * `Retry-After` est un standard que les clients et les robots respectent ; les
+ * formulaires de Fablio affichent déjà `json.erreur`, donc aucune modification
+ * côté navigateur n'est nécessaire.
+ */
+export function tropDeTentatives(message: string, secondes: number): NextResponse {
+  return NextResponse.json(
+    { erreur: message, retryApres: secondes },
+    {
+      status: 429,
+      headers: { "Retry-After": String(Math.max(1, Math.ceil(secondes))) },
+    }
+  );
+}
+
 export async function lireCorps(
   req: Request
 ): Promise<Record<string, unknown> | null> {

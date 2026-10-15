@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ListChecks,
@@ -218,8 +218,23 @@ function FormulaireExercice({
   const [erreur, setErreur] = useState<string | null>(null);
   const [chargement, setChargement] = useState(false);
   const [montreApercu, setMontreApercu] = useState(false);
-  const graine = useRef(Math.random().toString(36).slice(2));
+  // Graine de mélange de l'aperçu — correction (2026-10) : elle était créée dans
+  // `useRef(Math.random()…)`, donc calculée PENDANT le rendu (impur : signalé en
+  // erreur par le compilateur React, et source de résultats qui changent d'un
+  // re-rendu à l'autre). Elle est désormais posée dans un effet, au moment où
+  // l'aperçu s'ouvre. Avant le premier effet, on retombe sur une graine
+  // déterministe dérivée de l'identifiant : l'aperçu reste mélangé mais stable.
+  const [graineApercu, setGraineApercu] = useState("");
   const router = useRouter();
+
+  /**
+   * Basculer l'aperçu : le tirage du mélange se fait dans le GESTIONNAIRE de
+   * clic (jamais pendant le rendu), ce qui garde le composant pur.
+   */
+  function basculerApercu() {
+    setGraineApercu(Math.random().toString(36).slice(2));
+    setMontreApercu((m) => !m);
+  }
 
   function construirePayload(): PayloadExercice {
     switch (type) {
@@ -1070,7 +1085,7 @@ function FormulaireExercice({
         </button>
         <button
           type="button"
-          onClick={() => setMontreApercu((m) => !m)}
+          onClick={basculerApercu}
           disabled={erreurPayload !== null}
           className="btn-ligne"
         >
@@ -1094,7 +1109,11 @@ function FormulaireExercice({
               feedbackCorrect,
               feedbackIncorrect,
               payload,
-              presentation: fabriquerPresentation(type, payload, graine.current),
+              presentation: fabriquerPresentation(
+                type,
+                payload,
+                graineApercu || (initial?.id ?? "apercu")
+              ),
               maxTentatives: maxTentatives === "" ? null : Number(maxTentatives),
               tentativesUtilisees: 0,
               tentativesRestantes: null,

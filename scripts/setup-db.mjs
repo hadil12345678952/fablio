@@ -117,6 +117,17 @@ CREATE TABLE IF NOT EXISTS blocs_fable (
   modifie_le timestamptz NOT NULL DEFAULT now()
 );
 
+-- ---------- Bornage anti-force-brute de la connexion (audit 2026-10) -------
+-- Compteur d'échecs en base : en serverless, la mémoire par instance ne suffit
+-- pas. La clé est un SHA-256 de l'identifiant saisi (aucun email, aucun pseudo).
+CREATE TABLE IF NOT EXISTS tentatives_connexion (
+  cle text PRIMARY KEY,
+  echecs integer NOT NULL DEFAULT 0,
+  premiere_fenetre_le timestamptz NOT NULL DEFAULT now(),
+  derniere_le timestamptz NOT NULL DEFAULT now(),
+  bloque_jusqua timestamptz
+);
+
 -- ---------- Récupération de mot de passe enseignant ------------------------
 CREATE TABLE IF NOT EXISTS jetons_reinitialisation (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -128,6 +139,7 @@ CREATE TABLE IF NOT EXISTS jetons_reinitialisation (
 );
 
 -- ---------- Index ------------------------------------------------------------
+CREATE INDEX IF NOT EXISTS idx_connexion_bloque_jusqua ON tentatives_connexion(bloque_jusqua);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_jeton_hash ON jetons_reinitialisation(jeton_hash);
 CREATE INDEX IF NOT EXISTS idx_jeton_enseignant ON jetons_reinitialisation(enseignant_id);
 CREATE INDEX IF NOT EXISTS idx_codes_enseignant ON codes_parrainage(enseignant_id);

@@ -35,7 +35,7 @@ function ChampImage({ c, onChange }: { c: ContenuImage; onChange: (c: ContenuIma
     <div className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label className="etiquette mb-1.5 block">Adresse de l'image</label>
+          <label className="etiquette mb-1.5 block">Adresse de l’image</label>
           <input
             value={c.url}
             onChange={(e) => onChange({ ...c, url: e.target.value })}
@@ -66,7 +66,7 @@ function ChampImage({ c, onChange }: { c: ContenuImage; onChange: (c: ContenuIma
               onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
           ) : (
             <span className="grid size-full place-items-center text-xs font-bold text-encre/30">
-              Aperçu de l'image
+              Aperçu de l’image
             </span>
           )}
         </div>
@@ -248,7 +248,7 @@ function ChampTexte({
           <Volume2 className="size-4 text-azur" /> Lecture à voix haute
         </p>
         <p className="mt-0.5 mb-2 text-xs font-semibold text-encre/55">
-          L'élève pourra écouter la fable lue à voix haute. Testez ici :
+          L’élève pourra écouter la fable lue à voix haute. Testez ici :
         </p>
         <LecteurVocal texte={c.markdown.slice(0, 600) || "« Écrivez d'abord du texte. »"} compact etiquette="Tester la voix" />
       </div>
@@ -268,12 +268,12 @@ function ChampExercice({
   const chosir = exercicesDisponibles.find((e) => e.id === exerciceId) ?? null;
   return (
     <div>
-      <label className="etiquette mb-2 block">Sélectionnez l'exercice à inclure</label>
+      <label className="etiquette mb-2 block">Sélectionnez l’exercice à inclure</label>
       {exercicesDisponibles.length === 0 ? (
         <div className="flex items-start gap-2 rounded-2xl bg-ambre/12 px-4 py-3.5 text-sm font-bold text-ambre-fonce">
           <TriangleAlert className="mt-0.5 size-4 shrink-0" />
-          Aucun exercice dans cette fable. Créez-le d'abord dans « Gestion des exercices »,
-          puis revenez l'insérer ici.
+          Aucun exercice dans cette fable. Créez-le d’abord dans « Gestion des exercices »,
+          puis revenez l’insérer ici.
         </div>
       ) : (
         <select

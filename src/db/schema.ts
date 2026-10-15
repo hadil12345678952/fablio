@@ -210,6 +210,36 @@ export const jetonsReinitialisation = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Bornage anti-force-brute de la CONNEXION (2026-10).
+//
+// Pourquoi une table : en serverless (Vercel), plusieurs instances exécutent le
+// même code — un compteur en mémoire ne serait ni partagé ni persistant. La base
+// est le seul endroit correct pour compter. L'écriture est faite d'un seul
+// `INSERT … ON CONFLICT DO UPDATE` (atomique) : deux requêtes simultanées ne
+// peuvent pas se marcher dessus.
+//
+// Confidentialité : la clé est un HACHAGE SHA-256 de l'identifiant saisi —
+// aucun email, aucun pseudo d'élève n'est stocké en clair ici, et aucune donnée
+// personnelle n'y transite (la table est purement opérationnelle).
+// ---------------------------------------------------------------------------
+export const tentativesConnexion = pgTable(
+  "tentatives_connexion",
+  {
+    // « connexion-enseignant:<sha256(email)> » · « connexion-eleve:<sha256(code|pseudo)> »
+    cle: text("cle").primaryKey(),
+    echecs: integer("echecs").notNull().default(0),
+    premiereFenetreLe: timestamp("premiere_fenetre_le", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    derniereLe: timestamp("derniere_le", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    bloqueJusqua: timestamp("bloque_jusqua", { withTimezone: true }),
+  },
+  (t) => [index("idx_connexion_bloque_jusqua").on(t.bloqueJusqua)]
+);
+
+// ---------------------------------------------------------------------------
 // Sessions (cookie httpOnly)
 // ---------------------------------------------------------------------------
 export const sessions = pgTable(

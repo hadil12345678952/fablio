@@ -16,17 +16,23 @@ erreurs fréquentes, export CSV/PDF).
 | 🖼️ **Images par lien** | Liens directs ou de partage **Google Drive / Dropbox**, convertis automatiquement en URL affichable |
 
 - **Stack** : Next.js 16 (App Router) · React 19 · PostgreSQL + Drizzle ORM ·
-  Tailwind CSS v4 · Recharts · bcrypt · sessions par cookie httpOnly.
+  Tailwind CSS v4 · Recharts · bcrypt · sessions par cookie httpOnly ·
+  **polices auto-hébergées** (le build ne dépend d'aucun service externe).
+- **Sécurité** : bornage anti-force-brute des deux connexions (compteur en base,
+  fenêtre glissante, 429 + `Retry-After`), contrôle d'origine (CSRF) sur toutes les
+  méthodes mutantes de `/api`, en-têtes de sécurité HTTP, jetons de réinitialisation
+  hachés et à usage unique, `npm audit --omit=dev` **à zéro**.
 - **Public** : enseignants du primaire et élèves de 7 à 10 ans.
 
 ## Démarrage local
 
 ```bash
-npm install
-cp .env.example .env        # renseigner DATABASE_URL (PostgreSQL local)
-npx drizzle-kit push        # crée les 7 tables
-node scripts/seed.mjs       # données de démonstration (optionnel)
-npm run dev                 # http://localhost:3000
+npm ci                       # lockfile versionné : installation reproductible
+cp .env.example .env           # renseigner DATABASE_URL (PostgreSQL local)
+npm run db:setup               # ou : npx drizzle-kit push — crée les 10 tables
+npm run db:seed                # données de démonstration (optionnel)
+npm run db:blocs               # parcours par blocs à partir des fables existantes
+npm run dev                    # http://localhost:3000
 ```
 
 Comptes de démonstration (après seed) :
@@ -43,9 +49,14 @@ Comptes de démonstration (après seed) :
 |---|---|
 | `npm run dev` | serveur de développement |
 | `npm run build` / `npm start` | build et serveur de production |
-| `npx drizzle-kit push` | applique le schéma à la base de `DATABASE_URL` |
-| `node scripts/seed.mjs` | charge la démonstration (idempotent) |
-| `npx tsc --noEmit` | contrôle des types |
+| `npm run db:setup` | applique le DDL idempotent (bases existantes incluses) |
+| `npm run db:push` | applique le schéma Drizzle à la base de `DATABASE_URL` |
+| `npm run db:seed` | charge la démonstration (idempotent) |
+| `npm run db:blocs` | migre les fables vers le parcours par blocs |
+| `npm run demo:reset` | remet la base de démo dans l'état du seed |
+| `npm run typecheck` / `npm run lint` | types (0 erreur) et ESLint (0 erreur) |
+| `npm run test:e2e` | **suite fonctionnelle de bout en bout** (138 vérifications, serveur réel) |
+| `npm run audit:deps` | audit de sécurité des dépendances de production |
 
 ## Déploiement en production
 
@@ -55,9 +66,11 @@ schéma, seed, variables d'environnement, dépannage).
 ## Structure
 
 ```
-src/db/schema.ts        modèle de données (7 tables, relations, index)
+src/middleware.ts       contrôle d'origine (CSRF) sur /api — edge, sans accès à la base
+src/db/schema.ts        modèle de données (10 tables, relations, index)
 src/lib/exercices.ts    moteur d'exercices (payloads, notation, mélanges)
 src/lib/auth.ts         sessions, hachage bcrypt, gardes de rôle
+src/lib/securite.ts     bornage anti-force-brute (fenêtre glissante, en base)
 src/lib/queries.ts      requêtes métier partagées
 src/lib/statistiques.ts agrégations + export CSV
 src/app/api/…           22 endpoints REST
@@ -66,5 +79,10 @@ src/app/eleve/…         bibliothèque, lecture, exercices, profil
 src/components/…        joueur d'exercices (6 types), éditeurs, graphiques
 ```
 
+Déploiement : la commande de build est `node scripts/vercel-build.mjs` (voir
+`vercel.json`) — le push de schéma **ne s'exécute qu'en production**, jamais depuis
+un aperçu, pour qu'une branche testée n'écrive jamais dans la base réelle.
+
 Projet open source, conçu dans le cadre d'un master professionnel en
-technologies éducatives.
+technologies éducatives. (⚠ aucun fichier `LICENSE` n'est encore présent : voir
+`docs/AUDIT-2026-10.md` §2.1.)

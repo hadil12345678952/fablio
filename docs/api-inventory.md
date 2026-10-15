@@ -20,12 +20,21 @@
 
 ## 1. API internes — authentification (`/api/auth/**`)
 
+> **Contrôle d'origine (audit 2026-10)** : `src/middleware.ts` s'exécute **avant**
+> ces 31 routes pour toute méthode mutante (`POST`/`PUT`/`PATCH`/`DELETE`) sur
+> `/api/**`. Si un en-tête `Origin` est présent et ne désigne pas l'hôte public de
+> la requête, la réponse est **403** `{erreur:"Origine de la requête non reconnue…"}`
+> et **aucun** handler n'est appelé (ni session, ni base). Les requêtes sans `Origin`
+> et tous les `GET` sont inchangés. Ce statut peut donc s'ajouter aux réponses de
+> **toutes** les lignes du tableau ci-dessous.
+
+
 | Méthode | Chemin | Fichier / fonction | Auth | Entrées | Réponses | Effets de bord |
 |---|---|---|---|---|---|---|
 | POST | `/api/auth/enseignant/inscription` | `api/auth/enseignant/inscription/route.ts` → `POST` | — | `{ nom, email, motDePasse }` | `200 {ok:true,id}` · `400` (nom 2–60, e-mail regex, mot de passe ≥ 8) · `409` e-mail déjà pris | INSERT `enseignants` (bcrypt coût 10) + **session ouverte** (cookie posé) |
-| POST | `/api/auth/enseignant/connexion` | `api/auth/enseignant/connexion/route.ts` → `POST` | — | `{ email, motDePasse }` | `200 {ok:true}` · `400` corps invalide · `401` identifiants | INSERT `sessions` + cookie |
+| POST | `/api/auth/enseignant/connexion` | `api/auth/enseignant/connexion/route.ts` → `POST` | — | `{ email, motDePasse }` | `200 {ok:true}` · `400` corps invalide · `401` identifiants · **`429` + `Retry-After` au-delà de 5 échecs en 15 min** (anti-force-brute, audit 2026-10) | INSERT `sessions` + cookie ; UPSERT dans `tentatives_connexion` à l'échec, DELETE de la ligne à la réussite. **Le bornage est consulté AVANT bcrypt** (un attaquant ne peut plus faire payer 12 rounds de hachage par requête) |
 | POST | `/api/auth/eleve/inscription` | `api/auth/eleve/inscription/route.ts` → `POST` | — | `{ pseudo, code, pin }` | `200 {ok:true,id}` · `400` (pseudo `^[\p{L}\p{N}_-]{2,20}$`, code ≥ 4, PIN 4–12) · `404` code inconnu/inactif · `409` pseudo déjà utilisé dans la classe | INSERT `eleves` (PIN bcrypt) + session |
-| POST | `/api/auth/eleve/connexion` | `api/auth/eleve/connexion/route.ts` → `POST` | — | `{ pseudo, code, pin }` | `200 {ok:true}` · `401` code invalide/désactivé **ou** pseudo/PIN incorrect | INSERT session ; comparaison du pseudo en `lower()` (insensible à la casse), code **mis en majuscules** |
+| POST | `/api/auth/eleve/connexion` | `api/auth/eleve/connexion/route.ts` → `POST` | — | `{ pseudo, code, pin }` | `200 {ok:true}` · `401` code invalide/désactivé **ou** pseudo/PIN incorrect · **`429` + `Retry-After` au-delà de 5 échecs en 10 min** | INSERT session ; comparaison du pseudo en `lower()` (insensible à la casse), code **mis en majuscules** ; clé de bornage = SHA-256 de `code\|pseudo` (un élève bloqué ne bloque pas toute la classe) |
 | POST | `/api/auth/deconnexion` | `api/auth/deconnexion/route.ts` → `POST` | session | — | `200 {ok:true}` | DELETE de la session en base + suppression du cookie |
 | GET | `/api/auth/moi` | `api/auth/moi/route.ts` → `GET` | facultative | — | `200 {session: null}` ou `{session:{type:"enseignant",nom,email}}` ou `{session:{type:"eleve",pseudo}}` | Aucun hachage n'est jamais renvoyé (vérifié) |
 
@@ -111,7 +120,7 @@ invalidés à chaque demande — vérifié) ; **quota 3 demandes / 15 minutes / 
 
 | Méthode | Chemin | Fichier → fonction | Auth | Codes | Notes |
 |---|---|---|---|---|---|
-| GET | `/api/health` | `health/route.ts` → `GET` | — | `200 {ok:true,courriel:"resend"\|"journal"}` · `500 {ok:false}` | Exécute réellement `select 1` sur PostgreSQL (`dynamic = "force-dynamic"`) ; `courriel` indique le transport d'e-mail actif (diagnostic « les enseignants ne reçoivent pas leur lien ») |
+| GET | `/api/health` | `health/route.ts` → `GET` | — | `200 {ok:true, courriel:"resend"\|"journal", bornage:"actif"\|"inactif (désactivé)"\|"indisponible (table manquante ?)", schemaManquant:[…]}` · `500 {ok:false}` | Exécute réellement `select 1` sur PostgreSQL (`dynamic = "force-dynamic"`) ; `courriel` indique le transport d'e-mail actif (diagnostic « les enseignants ne reçoivent pas leur lien ») ; `bornage` et `schemaManquant` (audit 2026-10) donnent l'état de l'anti-force-brute et la liste des tables attendues absentes — **sans aucune donnée secrète ni personnelle** |
 | POST | `/api/tts` | `tts/route.ts` → `POST` | **session requise** (enseignant ou élève) | `200 audio/mpeg` · `400` texte < 2 car. · `401` · `502` (fournisseurs indisponibles) | Voir §7. Texte tronqué à 4 000 caractères. En-têtes de réponse : `Content-Type: audio/mpeg`, `Cache-Control: private, max-age=3600`, `X-Fournisseur-Tts` |
 
 ---
