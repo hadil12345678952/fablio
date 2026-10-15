@@ -43,6 +43,30 @@ const UNICODE_LATIN =
   "U+0304,U+0308,U+0329,U+2000-206F,U+2074,U+20AC,U+2122,U+2191,U+2193," +
   "U+2212,U+2215,U+FEFF,U+FFFD";
 
+
+// ---------------------------------------------------------------------------
+// MODE « --verser » : copie les fichiers RÉELS dans src/app/polices/, où le
+// projet les sert lui-même (next/font/local). C'est ce qui a rendu le build
+// indépendant de fonts.googleapis.com ; à relancer seulement pour changer de
+// version de police ou ajouter une graisse.
+// ---------------------------------------------------------------------------
+if (process.argv.includes("--verser")) {
+  const CIBLE = path.join("src", "app", "polices");
+  fs.mkdirSync(CIBLE, { recursive: true });
+  let verses = 0;
+  for (const p of POLICES) {
+    for (const poids of p.poids) {
+      const nom = `${p.fichier}-latin-${poids}-normal.woff2`;
+      const src = path.join(SOURCE, p.paquet, "files", nom);
+      if (!fs.existsSync(src)) throw new Error(`Police introuvable : ${src}`);
+      fs.copyFileSync(src, path.join(CIBLE, nom));
+      verses++;
+    }
+  }
+  console.log(`✓ ${verses} fichier(s) versé(s) dans ${CIBLE} (polices auto-hébergées).`);
+  process.exit(0);
+}
+
 fs.mkdirSync(DEST, { recursive: true });
 
 /** Reproduit getGoogleFontsUrl() de @next/font : l'URL réellement demandée. */
