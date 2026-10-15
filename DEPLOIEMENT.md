@@ -174,19 +174,61 @@ git push -u origin main
 ## 4. Créer et configurer le projet Vercel
 
 1. Sur <https://vercel.com> → **Add New → Project** → **Import** votre dépôt GitHub.
-2. Framework détecté automatiquement : **Next.js**. Laissez les réglages par défaut
-   (`Build Command: next build`, `Install: npm install`, `Output: automatique`).
+2. Framework détecté automatiquement : **Next.js**. **Ne touchez à rien** :
+   `vercel.json` à la racine fixe déjà `Install: npm ci` (lockfile versionné) et
+   `Build: node scripts/vercel-build.mjs`. Ce script de build **ne pousse le
+   schéma qu'en production** — voir l'encadré ci-dessous, à lire avant le premier
+   déploiement.
 3. **Avant de cliquer « Deploy »**, ouvrez la section **Environment Variables** et
    ajoutez, pour les 3 environnements (Production, Preview, Development) :
 
    | Nom | Valeur |
    |---|---|
    | `DATABASE_URL` | `postgresql://neondb_owner:<MDP>@ep-xxxx-pooler.<region>.aws.neon.tech/neondb?sslmode=require` *(votre chaîne Neon §2.1)* |
+   | `NEXT_PUBLIC_URL_SITE` *(fortement conseillé)* | `https://<votre-domaine>` — fige les liens de courriel sur le domaine public au lieu de suivre l'en-tête de la requête |
+   | `RESEND_API_KEY` + `COURRIEL_EXPEDITEUR` *(pour les courriels réels)* | clé Resend **et** adresse sur un domaine vérifié (SPF/DKIM). Sans elles, le lien de récupération est **journalisé** et non envoyé — `GET /api/health` répond `courriel:"journal"` |
    | `PG_POOL_MAX` *(optionnel)* | `5` |
    | `OPENAI_API_KEY` *(optionnel)* | clé OpenAI pour une synthèse vocale de meilleure qualité. **Sans cette clé, la lecture à voix haute fonctionne quand même** (service gratuit + voix du navigateur). |
 
-4. Cliquez sur **Deploy**. Le build dure ~1–2 min (les polices Google sont
-   téléchargées au build, c'est normal).
+4. Cliquez sur **Deploy**. Le build dure ~1 min : il est **entièrement hors réseau**
+   (les polices sont auto-hébergées dans `src/app/polices/` depuis l'audit du
+   15/10/2026 — plus aucun téléchargement depuis Google Fonts, donc plus de build
+   qui échoue parce qu'un hôte tiers est injoignable).
+
+> 🔴 **Aperçus (preview) et base de données — à lire avant de tester une branche.**
+> Une *commande de build* s'exécute aussi pour chaque déploiement d'aperçu, et
+> **Vercel partage les variables d'environnement de production avec les aperçus par
+> défaut**. Avant l'audit du 15/10, la commande conseillée était
+> `npx drizzle-kit push && npm run build` : la moindre branche testée envoyait donc
+> un **DDL sur la base de production** (avec, dans le pire des cas, une question de
+> troncature de table). C'est corrigé par `scripts/vercel-build.mjs`, qui ne pousse
+> le schéma que si `VERCEL_ENV=production` (`FABLIO_SCHEMA_PUSH=1|0` pour forcer).
+> **Il reste un second risque, que seul le propriétaire peut fermer** : les *données*
+> d'un aperçu (seed, comptes de démo, inscriptions d'élèves de test) s'écrivent
+> dans la base pointée par `DATABASE_URL`. Pour des aperçus sans risque :
+>
+> ```bash
+> # une branche Neon par PR (Neon → Branching, ou CLI)
+> neon branches create --project-id <id> --parent-endpoint-id <ep> --name preview-<slug>
+> # puis, dans Vercel : Environment Variables → Preview → DATABASE_URL = URL de la branche
+> ```
+>
+> Ne lancez **jamais** `npm run db:seed` avec une `DATABASE_URL` de production :
+> il réinitialise les comptes de démonstration, donc le mot de passe enseignant correspondant.
+
+> 🟠 **Contrôle d'origine (CSRF)** : `src/middleware.ts` refuse (403) toute requête
+> **mutante** sur `/api/**` dont l'en-tête `Origin` ne désigne pas l'hôte public. Les
+> requêtes sans `Origin` (curl, applications natives, tests) sont acceptées. Si un
+> client légitime doit appeler l'API depuis un autre domaine (app mobile, LMS),
+> c'est ce contrôle qu'il faut adapter — **et non** le désactiver.
+
+> 🟡 **Anti-force-brute** : après 5 échecs, la connexion répond `429` avec
+> `Retry-After` (10 min pour un enseignant, 5 min par élève). En cas de test de
+> charge sur la connexion, posez `FABLIO_CONNEXION_LIMITATION=off` sur l'environnement
+> de prévisualisation. Le bornage a besoin de la table `tentatives_connexion`
+> (créée par `npm run db:push` ou `node scripts/setup-db.mjs`) ; si elle manque, la
+> connexion **continue de fonctionner** (dégradation ouverte) et `GET /api/health`
+> l'indique dans `bornage` et `schemaManquant`.
 
 > Les variables `DATABASE_URL` côté serveur ne sont **jamais exposées au navigateur**
 > (seules les variables préfixées `NEXT_PUBLIC_` le sont — nous n'en utilisons aucune).
@@ -218,12 +260,16 @@ Si `/api/health` renvoie `{"ok":false}`, voir Dépannage §8.
   poste** (avec l'URL Neon) : `DATABASE_URL="…" npx drizzle-kit push`, et commitez le
   code correspondant. L'ordre compte : poussez le schéma **avant** le code qui
   l'utilise.
-- **Si la commande de build Vercel fait déjà `npx drizzle-kit push && npm run build`** :
-  c'est supporté et idempotent, à condition que le schéma Drizzle et la base soient
-  alignés (§2.2). Un push sans différence ne pose aucune question et n'écrit rien ; un
-  push **avec** différence destructive (suppression de table/colonne) exige un terminal
-  et **fait échouer le build** — par sécurité, préférez pousser le schéma depuis votre
-  poste et laissez le build se contenter de compiler.
+- **Depuis l'audit du 15/10/2026**, la commande de build est
+  `node scripts/vercel-build.mjs` (fixée dans `vercel.json`) : elle pousse le schéma
+  **uniquement en `VERCEL_ENV=production`** et ne pose donc plus jamais de question
+  depuis un aperçu. Si vous préférez gérer les schémas entièrement à la main, mettez
+  `FABLIO_SCHEMA_PUSH=0` : le build se contente alors de compiler, et c'est à vous
+  de lancer `npx drizzle-kit push` depuis votre poste **avant** de déployer le code
+  qui utilise le nouveau schéma.
+- Un push **avec** différence destructive (suppression de table/colonne) exige un
+  terminal et fait échouer le build (§2.2) : relisez alors la différence depuis un
+  poste, appliquez-la à la main, puis relancez le déploiement.
 - **Logs** : Vercel → projet → **Logs / Functions** ; côté base : Neon → **Monitoring**.
 
 ---

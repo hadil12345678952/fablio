@@ -26,6 +26,9 @@
 | 8 | `OPENAI_API_KEY` | Synthèse vocale de meilleure qualité | `src/app/api/tts/route.ts` | **OpenAI** | non — sans clé, Google Translate TTS puis voix du navigateur | Serveur | Non (clé `sk-…` à créer côté OpenAI) |
 | 9 | `OPENAI_TTS_MODEL` | Modèle TTS | idem (défaut `gpt-4o-mini-tts`) | OpenAI | non | Serveur | Oui : documentation OpenAI |
 | 10 | `OPENAI_TTS_VOICE` | Voix (`alloy`, `nova`, `shimmer`… — défaut `shimmer`) | idem | OpenAI | non | Serveur | Oui : documentation OpenAI |
+| 11 | `FABLIO_CONNEXION_LIMITATION` | **Désactive** le bornage anti-force-brute si `off` / `aucun` / `desactive` (défaut : bornage actif) | `src/lib/securite.ts` | — (compteur en base) | non | Serveur | Non : réservé aux tests de charge et au dépannage |
+| 12 | `FABLIO_CONNEXION_STRICT` | Si `1` : quand la table `tentatives_connexion` est absente ou la base injoignable, la connexion est **refusée** (429) au lieu de passer en dégradation ouverte | `src/lib/securite.ts` | PostgreSQL | non — **défaut : fail-open**, choix assumé pour ne jamais enfermer une classe derrière une migration manquante | Serveur | Non |
+| 13 | `FABLIO_SCHEMA_PUSH` | Force (`1`) ou interdit (`0`) le `drizzle-kit push` exécuté par la commande de build Vercel. Défaut : poussé **uniquement en `VERCEL_ENV=production`**, jamais depuis un aperçu | `scripts/vercel-build.mjs` | Vercel / PostgreSQL | non | Serveur (build) | Non |
 
 ### Remarques importantes
 

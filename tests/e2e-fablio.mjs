@@ -16,7 +16,20 @@
 // ---------------------------------------------------------------------------
 
 const BASE = process.env.BASE_URL ?? "http://127.0.0.1:3000";
+import {
+  fermerBaseDeTest,
+  ouvrirBaseDeTest,
+  reinitialiserBornage,
+  supprimerComptesJeton,
+} from "./hygiene-base.mjs";
 const SUFFIXE = Date.now().toString(36);
+
+// Hygiène de test (audit 2026-10) : voir tests/hygiene-base.mjs — sans cela, les
+// sondes négatives ne sont pas reproductibles (le bornage anti-force-brute compte
+// les échecs par identifiant pendant 10 à 15 min) et les comptes-jetons
+// s'accumulent et bloquent scripts/reinitialiser-demo.mjs.
+const BASE_CLIENT = await ouvrirBaseDeTest();
+await reinitialiserBornage(BASE_CLIENT);
 
 let personnes = 0;
 let reussis = 0;
@@ -881,6 +894,7 @@ section("18. Nettoyage des artefacts de test");
 }
 
 
+
 section("19. Anti-force-brute de la connexion (audit 2026-10)");
 {
   // Compte enseignant jetable : le bornage est volontairement par identifiant,
@@ -1061,6 +1075,19 @@ section("21. Fichiers statiques (illustrations locales du dépôt)");
 
   const polices = await fetch(`${BASE}/favicon.ico`);
   verifier(`GET /favicon.ico → ${polices.status}`, [200, 404].includes(polices.status));
+}
+// Comptes-jetons de la campagne (enseignants *.fablio.test, élèves max…/pb…/e…/ok…)
+// et remises à zéro du bornage : la suite doit rester REJOUABLE immédiatement.
+const netoya = await supprimerComptesJeton(BASE_CLIENT, SUFFIXE);
+const bornageReinitialise = await reinitialiserBornage(BASE_CLIENT);
+await fermerBaseDeTest(BASE_CLIENT);
+verifier(
+  "les comptes-jetons de la campagne sont supprimés (aucune dépendance aux routes absentes)",
+  netoya.enseignants >= 0 && netoya.eleves >= 0,
+  `enseignants ${netoya.enseignants}, élèves ${netoya.eleves}`
+);
+if (BASE_CLIENT) {
+  verifier("bornage remis à zéro après campagne (suite rejouable)", bornageReinitialise);
 }
 
 // ---------------------------------------------------------------------------
