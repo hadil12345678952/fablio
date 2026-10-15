@@ -977,6 +977,92 @@ section("19. Anti-force-brute de la connexion (audit 2026-10)");
   );
 }
 
+
+section("20. Contrôle d'origine (CSRF) sur les méthodes mutantes");
+{
+  const ENNEMI = "https://phishing.example.tn";
+  const hote = new URL(BASE).origin;
+
+  const crossOrigin = await requete("POST", "/api/enseignant/fables", {
+    entetes: { Origin: ENNEMI },
+    corps: { titre: "X" },
+  });
+  verifier(
+    "POST inter-site vers une route qui écrit → 403 (refusé avant la base)",
+    crossOrigin.statut === 403,
+    `reçu ${crossOrigin.statut}`
+  );
+
+  const crossOriginDelete = await requete("DELETE", "/api/enseignant/fables/00000000-0000-0000-0000-000000000000", {
+    entetes: { Origin: ENNEMI },
+  });
+  verifier(
+    "DELETE inter-site → 403 (aucune méthode mutante tolérée)",
+    crossOriginDelete.statut === 403,
+    `reçu ${crossOriginDelete.statut}`
+  );
+
+  const memeOrigine = await requete("POST", "/api/auth/enseignant/connexion", {
+    entetes: { Origin: hote },
+    corps: { email: "demo.enseignant@fablio.tn", motDePasse: "demo1234" },
+  });
+  verifier(
+    "POST same-origin (le vrai navigateur de l'enseignant) → jamais 403",
+    memeOrigine.statut !== 403,
+    `reçu ${memeOrigine.statut}`
+  );
+
+  const sansOrigin = await requete("POST", "/api/auth/enseignant/connexion", {
+    corps: { email: "demo.enseignant@fablio.tn", motDePasse: "demo1234" },
+  });
+  verifier(
+    "requête sans en-tête Origin (curl, app native) → acceptée puis traitée par la route",
+    sansOrigin.statut !== 403,
+    `reçu ${sansOrigin.statut}`
+  );
+
+  const lectureCrossOrigin = await requete("GET", "/api/eleve/fables", {
+    entetes: { Origin: ENNEMI },
+  });
+  verifier(
+    "GET inter-site non bloqué par le CSRF (lecture ; l'auth s'en charge) → jamais 403",
+    lectureCrossOrigin.statut !== 403,
+    `reçu ${lectureCrossOrigin.statut}`
+  );
+
+  const pageCrossOrigin = await requete("GET", "/", { entetes: { Origin: ENNEMI } });
+  verifier("une PAGE reste servie quelle que soit l'origine", pageCrossOrigin.statut === 200, `reçu ${pageCrossOrigin.statut}`);
+}
+
+section("21. Fichiers statiques (illustrations locales du dépôt)");
+{
+  for (const [chemin, attendu] of [
+    ["/images/hero-livre-magique.jpg", "image/jpeg"],
+    ["/images/fables/cigale-fourmi.jpg", "image/jpeg"],
+    ["/images/fables/corbeau-renard.jpg", "image/jpeg"],
+    ["/images/fables/lievre-tortue.jpg", "image/jpeg"],
+  ]) {
+    const res = await fetch(`${BASE}${chemin}`);
+    verifier(
+      `${chemin} → 200 et type d'image (le dépôt doit TOUJOURS contenir ses visuels)`,
+      res.status === 200 && (res.headers.get("content-type") ?? "").startsWith(attendu),
+      `reçu ${res.status} ${res.headers.get("content-type")}`
+    );
+  }
+
+  const optimisee = await fetch(
+    `${BASE}/_next/image?url=%2Fimages%2Fhero-livre-magique.jpg&w=640&q=75`
+  );
+  verifier(
+    "l'optimiseur d'images Next sert le visuel local (200 image/jpeg)",
+    optimisee.status === 200 && (optimisee.headers.get("content-type") ?? "").startsWith("image/"),
+    `reçu ${optimisee.status}`
+  );
+
+  const polices = await fetch(`${BASE}/favicon.ico`);
+  verifier(`GET /favicon.ico → ${polices.status}`, [200, 404].includes(polices.status));
+}
+
 // ---------------------------------------------------------------------------
 
 console.log("\n" + "─".repeat(72));

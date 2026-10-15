@@ -1,12 +1,19 @@
 {
-  "name": "nextjs-postgresql-template",
+  "name": "fablio",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:setup": "node scripts/setup-db.mjs",
+    "db:push": "drizzle-kit push",
+    "db:seed": "node scripts/seed.mjs",
+    "db:blocs": "node scripts/migrer-blocs.mjs --execute",
+    "demo:reset": "node scripts/reinitialiser-demo.mjs",
+    "test:e2e": "node tests/e2e-fablio.mjs",
+    "audit:deps": "npm audit --omit=dev"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -32,5 +39,10 @@
     "postcss": "8.5.8",
     "tailwindcss": "4.1.17",
     "typescript": "5.9.3"
+  },
+  "version": "1.0.0",
+  "description": "Fablio — plateforme éducative (français) pour l'apprentissage des fables à l'école primaire : fables et exercices créés par l'enseignant, élèves rejoignant la classe par code de parrainage, suivi statistique.",
+  "engines": {
+    "node": ">=20.9"
   }
 }

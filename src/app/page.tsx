@@ -167,10 +167,10 @@ export default async function PageAccueil() {
               <div className="relative">
                 <div className="anim-flotter relative mx-auto max-w-xl">
                   <Image
-                    src="/images/hero-livre-magique.png"
+                    src="/images/hero-livre-magique.jpg"
                     alt="Un grand livre ouvert d'où s'échappent joyeusement les animaux des fables"
-                    width={900}
-                    height={720}
+                    width={1200}
+                    height={655}
                     priority
                     className="w-full drop-shadow-2xl"
                   />
